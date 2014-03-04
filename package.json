@@ -1,0 +1,22 @@
+{
+    "name" : "mosaic",
+    "version" : "0.0.1",
+    "devDependencies" : {
+        "mocha" : "*",
+        "superagent" : "*",
+        "expect.js" : "*"
+    },
+    "private" : true,
+    "dependencies" : {
+        "underscore" : "*",
+        "q" : "*",
+        "express" : "*"
+    },
+    "scripts" : {
+        "test" : "mocha -R spec ./test/Test*"
+    },
+    "engines" : {
+        "node" : "latest",
+        "npm" : "latest"
+    }
+}

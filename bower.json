@@ -1,0 +1,17 @@
+{
+    "name" : "mosaic",
+    "version" : "0.0.1",
+    "dependencies" : {
+        "bootstrap" : "*",
+        "font-awesome" : "*",
+        "jquery" : "*",
+        "q" : "*",
+        "underscore" : "*",
+        "requirejs" : "*",
+        "requirejs-text" : "*"
+    },
+    "devDependencies" : {
+        "mocha" : "*",
+        "expect" : "*"
+    }
+}
