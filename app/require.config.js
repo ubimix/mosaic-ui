@@ -14,14 +14,14 @@ require
                 }
             },
             paths : {
-                'jquery' : './libs/jquery/jquery',
+                'jquery' : './libs/jquery/dist/jquery',
                 'leaflet' : './libs/leaflet/leaflet-src',
                 'leaflet.markercluster' : './libs/leaflet.markercluster/leaflet.markercluster-src',
                 'leaflet.loading' : './libs/leaflet.loading/src/Control.Loading',
                 'leaflet.utfgrid' : './libs/leaflet.utfgrid/leaflet.utfgrid-src',
                 'leaflet.geometryutil' : './libs/leaflet.geometryutil/dist/leaflet.geometryutil',
                 'text' : './libs/requirejs-text/text',
-                'underscore' : './libs/underscore/underscore-min',
+                'underscore' : './libs/underscore/underscore',
                 'bootstrap' : './libs/bootstrap/dist/js/bootstrap',
                 'q' : './libs/q/q',
 
@@ -47,9 +47,6 @@ require
                 'leaflet.markercluster' : {
                     deps : [ 'leaflet' ]
                 },
-                'leaflet.rrose' : {
-                    deps : [ 'leaflet' ]
-                },
                 'leaflet.utfgrid' : {
                     deps : [ 'leaflet' ]
                 },
@@ -59,8 +56,8 @@ require
                 'leaflet.geometryutil' : {
                     deps : [ 'leaflet' ]
                 },
-                'P' : {
-                    deps : [ 'when' ]
+                'q' : {
+                    exports : [ 'q' ]
                 }
             }
         });
