@@ -25,7 +25,7 @@ require
                 'bootstrap' : './libs/bootstrap/dist/js/bootstrap',
                 'q' : './libs/q/q',
 
-                'leaflet.all' : './Leaflet.all'
+                'L' : './Leaflet.all'
             },
             shim : {
                 'backbone' : {
@@ -55,6 +55,10 @@ require
                 },
                 'leaflet.geometryutil' : {
                     deps : [ 'leaflet' ]
+                },
+                'L' : {
+                    deps : [ 'leaflet', 'leaflet.markercluster',
+                            'leaflet.utfgrid', 'leaflet.geometryutil' ]
                 },
                 'q' : {
                     exports : [ 'q' ]
