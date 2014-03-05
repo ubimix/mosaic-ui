@@ -61,10 +61,20 @@
             });
         }
 
+        /* --------------------------------------------------- */
+        /* Mix-in methods */
+
+        /**
+         * A basic mix-in method used to defined the type of the parent class.
+         */
         Mosaic.getType = function() {
             var type = this.type = this.type || _.uniqueId('type-');
             return type;
         }
+        /**
+         * This mix-in method returns a unique identifier for instances of the
+         * parent class.
+         */
         Mosaic.getId = function() {
             var options = this.options = this.options || {};
             var id = options.id = options.id || _.uniqueId('id-');
@@ -130,9 +140,22 @@
             return this._instance;
         }
 
+        /**
+         * A common super-class for all "data sets" giving access to resources.
+         * Each dataset could be seen as a collection of resources.
+         */
         Mosaic.DataSet = Mosaic.Class.extend({
+            /** Returns a unique identifier of this dataset */
             getId : Mosaic.getId,
+            /**
+             * Returns the logical type of this dataset. This value should be
+             * defined as a "type" field in subclasses.
+             */
             getType : Mosaic.getType,
+
+            /**
+             * Initializes internal fields for objects of this type.
+             */
             initialize : function(options) {
                 this.setOptions(options);
                 this._dataSets = {};
@@ -149,7 +172,6 @@
                 while (adapter == null & resourceType != null) {
                     adapter = adapters.getAdapter(resourceType, adapterType);
                     var parentType = this.getParentResourceType(resourceType);
-                    console.log(resourceType, parentType, adapter);
                     resourceType = parentType;
                 }
                 return adapter;
@@ -185,6 +207,11 @@
                 return type;
             }
         });
+
+        /**
+         * This dataset is used as a wrapper for a collection of GeoJSON
+         * objects.
+         */
         Mosaic.GeoJsonDataSet = Mosaic.DataSet.extend({
             type : 'GeoJsonDataSet',
             getResources : function() {
@@ -247,6 +274,11 @@
                 }
             }
         });
+
+        /**
+         * This dataset corresponds to static map tiles. It don't have any
+         * data/resources.
+         */
         Mosaic.TilesDataSet = Mosaic.DataSet.extend({
             type : 'TilesDataSet',
             getTilesUrl : function() {
@@ -256,6 +288,11 @@
                 return this.options.attribution;
             }
         })
+
+        /**
+         * This dataset corresponds to interactive tiles (UTFGrid). It returns
+         * all information loaded by the map represented in UTFGrid tiles.
+         */
         Mosaic.GeoUtfGridSet = Mosaic.TilesDataSet.extend({
             type : 'GeoUtfGridSet'
         });
@@ -330,7 +367,7 @@
         };
 
         /** Removes all event listeners produced by external objects. */
-        Mosaic.clearListeners = function() {
+        Mosaic.stopListening = function() {
             _.each(this._listeners, function(listener) {
                 var context = listener.context || this;
                 listener.obj.off(listener.event, listener.handler, context);
@@ -347,17 +384,15 @@
          */
         Mosaic._registerTypeAdapters = function(config) {
             var adapterManager = Mosaic.AdapterManager.getInstance();
-            _.each(config, function(options, type) {
-                adapterManager.registerAdapter(type, this, {
-                    getOptions : function(dataSet, resource) {
-                        return options;
-                    }
-                })
+            _.each(config, function(value, type) {
+                adapterManager.registerAdapter(type, this, value);
             }, this);
         }
 
-        /** A common superclass for all views (Map, List, etc). */
-        Mosaic.View = Mosaic.Class.extend({
+        /**
+         * Template-based view. It uses HTML templates to represent information.
+         */
+        Mosaic.TemplateView = Mosaic.Class.extend({
 
             /** Returns a unique identifier of this view. */
             getId : Mosaic.getId,
@@ -373,7 +408,188 @@
             listenTo : Mosaic.listenTo,
 
             /** Removes all event listeners produced by external objects. */
-            clearListeners : Mosaic.clearListeners,
+            stopListening : Mosaic.stopListening,
+
+            /** Initializes this object. */
+            initialize : function(options) {
+                this.setOptions(options);
+                this.triggerMethod('initialize');
+            },
+
+            /**
+             * Returns the DOM element used as a container for the map.
+             */
+            getElement : function() {
+                if (!this.$el) {
+                    var el = this.options.el || '<div></div>';
+                    this.$el = $(el);
+                }
+                return this.$el;
+            },
+
+            renderDefault : function(el, methodName) {
+                var err = new Error('[' + methodName
+                        + ']: Renderer method not found.');
+                console.log(err, el);
+            },
+
+            renderedDefault : function(el, methodName) {
+                var err = new Error('[' + methodName + ']: Method called '
+                        + 'after the rendering process ' + 'is not defined.');
+                console.log(err, el);
+            },
+
+            _callReferencedMethod : function(elm, field, def) {
+                var result = null;
+                var methodName = elm.attr(field);
+                if (methodName) {
+                    var method = this[methodName] || this[def];
+                    elm.removeAttr(field);
+                    if (method) {
+                        result = method.call(this, elm, methodName);
+                    }
+                }
+                return result;
+            },
+
+            _renderElement : function(elm, render, list) {
+                var visit = true;
+                if (render !== false) {
+                    if (elm.attr('data-rendered')) {
+                        list.push(elm);
+                    }
+                    var result = this._callReferencedMethod(elm, 'data-render',
+                            'renderDefault');
+                    visit = result !== false;
+                }
+                if (visit) {
+                    var children = _.toArray(elm.children());
+                    _.each(children, function(elm) {
+                        this._renderElement($(elm), true, list);
+                    }, this)
+                }
+                this.triggerMethod('render');
+            },
+
+            renderElement : function(elm, render) {
+                var list = [];
+                this._renderElement(elm, render, list);
+                // Notify about the end of the rendering process
+                _.each(list, function(e) {
+                    this._callReferencedMethod(e, 'data-rendered',
+                            'renderedDefault');
+                }, this)
+            },
+
+            bindListeners : function(elm, event, attrName) {
+                if (attrName === undefined) {
+                    attrName = 'data-action-' + event;
+                }
+                var that = this;
+                var selector = '[' + attrName + ']';
+                elm.on(event, selector, function(ev) {
+                    var e = $(ev.target);
+                    var actionName = e.attr(attrName);
+                    var action = that[actionName];
+                    if (action) {
+                        action.call(that, ev, e);
+                    }
+                });
+            },
+            render : function() {
+                var that = this;
+                that.triggerMethod('render:begin');
+                that._render();
+                that._bindEventListeners();
+                that.triggerMethod('render:end');
+                return this;
+            },
+            _bindEventListeners : function() {
+                var that = this;
+                var element = this.getElement();
+                that.bindListeners(element, 'click');
+                that.bindListeners(element, 'mouseover');
+                that.bindListeners(element, 'mouseout');
+            },
+            _render : function() {
+                var that = this;
+                var element = that.getElement();
+                var template = that.template;
+                if (template) {
+                    var options = _.extend({}, that.options, {
+                        view : that
+                    });
+                    if (_.isString(template)) {
+                        template = _.template(template);
+                    }
+                    var html = template(options);
+                    element.html(html);
+                }
+                that.renderElement(element);
+                return that;
+            },
+
+            remove : function() {
+                var element = view.getElement();
+                element.remove();
+                this.stopListening();
+                return this;
+            }
+        });
+
+        /* Static methods */
+        Mosaic.TemplateView._trim = function(str) {
+            return str.replace(/^\s+|\s+$/gim, '');
+        }
+        Mosaic.TemplateView._toObjects = function(e) {
+            var results = [];
+            var that = this;
+            e.each(function() {
+                try {
+                    var text = $(this).text();
+                    text = that._trim(text);
+                    text = '( ' + text + ')';
+                    var obj = eval(text);
+                    if (_.isFunction(obj)) {
+                        obj = obj();
+                    }
+                    results.push(obj);
+                } catch (e) {
+                    console.log('ERROR!', e);
+                }
+            })
+            return results;
+        }
+        Mosaic.TemplateView.extendViewType = function(e, View) {
+            e = $(e);
+            View = View || this.extend();
+            // Define template methods
+            var objects = e.find('[data-type="methods"]');
+            _.each(this._toObjects(objects), function(obj) {
+                _.extend(View.prototype, obj);
+            }, this);
+            objects.remove();
+
+            // Define static constants
+            var objects = e.find('[data-type="const"]');
+            _.each(this._toObjects(objects), function(obj) {
+                _.extend(View, obj);
+            }, this);
+            objects.remove();
+
+            // The rest of the code is used as a
+            // template
+            var html = e.html() || e.text();
+            html = this._trim(html);
+            if (html != '') {
+                var tmpl = _.template(html);
+                View.prototype.template = tmpl;
+            }
+            return View;
+        }
+
+        /** A common superclass for all views (Map, List, etc). */
+        Mosaic.View = Mosaic.TemplateView.extend({
 
             /** Returns an application managing this view */
             getApp : function() {
@@ -393,7 +609,7 @@
                 this.listenTo(app, 'dataSet:remove', this.onRemoveDataSet);
                 this.listenTo(app, 'start', this.onStart);
                 this.listenTo(app, 'stop', function(ev) {
-                    this.clearListeners();
+                    this.stopListening();
                     this.onStop(ev);
                 });
                 this._entities = {};
@@ -445,8 +661,8 @@
             onRemoveDataSet : function(e) {
                 var dataSet = e.data;
                 var adapter = this.getEntity(dataSet.getId());
-                if (adapter && adapter.clear) {
-                    adapter.clear(this, dataSet);
+                if (adapter && adapter.remove) {
+                    adapter.remove();
                 }
             }
         });
@@ -454,6 +670,7 @@
         /** A view responsible for the map visualization. */
         Mosaic.MapView = Mosaic.View.extend({
             type : 'MapView',
+
             /**
              * Returns the underlying Leaflet map object. This method is used by
              * MapAdapters to visualize data on the map.
@@ -476,13 +693,6 @@
             /** Returns the initial center of the map. */
             getInitialCenter : function() {
                 return _.toArray(this.options.initialCenter || [ 0, 0 ]);
-            },
-            /**
-             * Returns the DOM element used as a container for the map.
-             */
-            getElement : function() {
-                var elm = $(this.options.el);
-                return elm;
             },
             /**
              * Resets the map view to its initial values (initial zoom level and
@@ -548,6 +758,7 @@
             /** This method is called when the application starts. */
             onStart : function(e) {
                 var elm = this.getElement();
+                // FIXME:
                 elm.html('<div>List</div>');
             },
             /** This method is called when the application stops. */
@@ -563,7 +774,7 @@
          * adapters.
          */
         Mosaic.ViewAdapter = Mosaic.Class.extend({
-            clearListeners : Mosaic.clearListeners,
+            stopListening : Mosaic.stopListening,
             listenTo : Mosaic.listenTo
         });
 
@@ -574,11 +785,9 @@
          * visualize resources.
          */
         Mosaic.MapFigureOptions = Mosaic.Class.extend({
-            type : 'MapFigureOptions',
-            getOptions : function() {
-                return this.options;
-            }
+            type : 'MapFigureOptions'
         });
+
         /**
          * An utility method used to register map figures styles for multiple
          * resource types. The specified configuration object should contain
@@ -586,29 +795,60 @@
          */
         Mosaic.MapFigureOptions.registerOptions = Mosaic._registerTypeAdapters;
 
+        /** Visualization of the content in the popup view. */
+        Mosaic.MapPopupView = Mosaic.TemplateView.extend({});
+        /**
+         * An utility method used to register popup views for multiple resource
+         * types. The specified configuration object should contain resource
+         * types with the corresponding popup view classes.
+         */
+        Mosaic.MapPopupView.registerViews = Mosaic._registerTypeAdapters;
+
+        Mosaic.MapActivePopupView = Mosaic.MapPopupView.extend({
+            type : 'MapActivePopupView'
+        });
+        Mosaic.MapFocusedPopupView = Mosaic.MapPopupView.extend({
+            type : 'MapFocusedPopupView'
+        });
+
         /** GeoJsonDataSet - MapView adapter */
         Mosaic.GeoJsonMapViewAdapter = Mosaic.ViewAdapter.extend({
             initialize : function() {
                 this._index = {};
             },
+            _showPopup : function(e, AdapterType) {
+                var resource = e.resource;
+                var id = this._data.getResourceId(resource);
+                var layer = this._index[id];
+                if (layer) {
+                    var ViewType = this._data.getResourceAdapter(resource,
+                            AdapterType);
+                    if (ViewType) {
+                        var view = new ViewType({
+                            resource : resource,
+                            data : this._data,
+                            parentView : this._view
+                        });
+                        var element = view.getElement();
+                        layer.bindPopup(element[0]).openPopup();
+                        view.render();
+                        layer.bindPopup(element[0]).openPopup();
+                    }
+                }
+            },
+
             _bindDataEventListeners : function() {
                 this.listenTo(this._data, 'activate', function(e) {
-                    var resource = e.resource;
-                    var id = this._data.getResourceId(resource);
-                    var layer = this._index[id];
-                    if (layer) {
-                        layer.bindPopup(resource.description).openPopup();
-                        console.log('* Activate: ', e)
-                    }
+                    this._showPopup(e, Mosaic.MapActivePopupView);
                 });
                 this.listenTo(this._data, 'deactivate', function(e) {
-                    console.log('* Deactivate: ', e)
+                    // console.log('* Deactivate: ', e)
                 })
-                this.listenTo(this._data, 'focus', function(e) {
-                    console.log('* Focus: ', e)
-                })
+                this.listenTo(this._data, 'focus', _.debounce(function(e) {
+                    this._showPopup(e, Mosaic.MapFocusedPopupView);
+                }, 100));
                 this.listenTo(this._data, 'blur', function(e) {
-                    console.log('* Blur: ', e)
+                    // console.log('* Blur: ', e)
                 })
             },
 
@@ -624,10 +864,13 @@
                         return new L.Marker(latlng);
                     },
                     style : function(resource) {
-                        var adapter = that._data.getResourceAdapter(resource,
-                                Mosaic.MapFigureOptions);
-                        var options = adapter ? adapter.getOptions(that._data,
-                                resource) : {};
+                        var options = that._data.getResourceAdapter(resource,
+                                Mosaic.MapFigureOptions)
+                                || {};
+                        if (_.isFunction(options)) {
+                            options = options.call(options, that._data,
+                                    resource);
+                        }
                         return options;
                     },
                     onEachFeature : function(resource, layer) {
@@ -667,12 +910,22 @@
                 map.addLayer(this._groupLayer);
                 that._bindDataEventListeners();
             },
-            clear : function(view, data) {
+            remove : function() {
                 var map = this._view.getMap();
                 map.removeLayer(this._groupLayer);
-                this.clearListeners();
+                this.stopListening();
             }
         });
+
+        /* ------------------------------------------------- */
+        /** Resource visualization in the list. */
+        Mosaic.ListItemView = Mosaic.TemplateView.extend({});
+        /**
+         * An utility method used to register resource list views for multiple
+         * resource types. The specified configuration object should contain
+         * resource types with the corresponding list view classes.
+         */
+        Mosaic.ListItemView.registerViews = Mosaic._registerTypeAdapters;
 
         /* ------------------------------------------------- */
         /** GeoJsonDataSet - ListView adapter */
@@ -688,16 +941,21 @@
                 var that = this;
                 _.each(list, function(resource) {
                     var str = JSON.stringify(resource.properties.label);
-                    str = '<p>' + str + '</p>';
-                    var elm = $(str);
-                    this._container.append(elm);
-                    elm.click(function() {
-                        that._data.activate(resource);
-                    })
+                    var ViewType = this._data.getResourceAdapter(resource,
+                            Mosaic.ListItemView);
+                    if (ViewType) {
+                        var view = new ViewType({
+                            resource : resource,
+                            data : this._data,
+                            parentView : this._view
+                        });
+                        this._container.append(view.getElement());
+                        view.render();
+                    }
                 }, this);
             },
-            clear : function(view, data) {
-                this.clearListeners();
+            remove : function() {
+                this.stopListening();
                 this._container.remove();
             }
         })
@@ -716,11 +974,11 @@
                     maxZoom : maxZoom
                 }).addTo(map);
             },
-            clear : function(view, data) {
+            remove : function() {
                 var map = this._view.getMap();
                 map.removeLayer(this._layer);
                 delete this._layer;
-                this.clearListeners();
+                this.stopListening();
             }
         })
 

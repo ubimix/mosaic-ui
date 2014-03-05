@@ -37,6 +37,58 @@
                 opacity : 0.5,
                 dashArray : '5, 3'
             }
+        });
+
+        Mosaic.ResourceView = Mosaic.TemplateView
+                .extend({
+                    template : '' + '<div>' + '<h3 data-render="renderTitle" '
+                            + ' data-action-click="activateResource"></h3>'
+                            + '<div data-render="renderDescription"></div>'
+                            + +'</div>',
+                    renderTitle : function(el) {
+                        var resource = this.options.resource;
+                        el.text(resource.properties.label);
+                    },
+                    renderDescription : function(el) {
+                        var resource = this.options.resource;
+                        el.html(resource.properties.description);
+                    },
+                    activateResource : function(ev) {
+                        this.options.data.activate(this.options.resource);
+                    }
+                });
+
+        Mosaic.MapFocusedPopupView.registerViews({
+            'Resource' : Mosaic.ResourceView.extend({
+                template : 'Cou-cou!'
+            }),
+            'photo' : Mosaic.ResourceView.extend({
+                template : 'This is a photo!'
+            }),
+        });
+
+        Mosaic.MapActivePopupView.registerViews({
+            'Resource' : Mosaic.ResourceView.extend({
+                template : 'COU-COU!'
+            }),
+            'photo' : Mosaic.ResourceView.extend({
+                template : 'PHOTO!'
+            }),
+            'rue' : Mosaic.ResourceView.extend({
+                template : '' + '<div>' + '<strong data-render="renderTitle" '
+                        + ' data-action-click="sayHello"></strong>'
+                        + '<div data-render="renderDescription"></div>'
+                        + +'</div>',
+                sayHello : function(ev) {
+                    alert('Hello, there')
+                }
+            }),
+        })
+
+        Mosaic.ListItemView.registerViews({
+            'Resource' : Mosaic.ResourceView,
+            'rue' : Mosaic.ResourceView,
+            'photo' : Mosaic.ResourceView,
         })
 
         var app = new Mosaic.App();
