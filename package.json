@@ -10,10 +10,11 @@
     "dependencies" : {
         "underscore" : "*",
         "q" : "*",
-        "express" : "*"
+        "express" : "*",
+        "amdefine" : "*"
     },
     "scripts" : {
-        "test" : "mocha -R spec ./test/Test*"
+        "test" : "mocha -R spec ./tests/Test*"
     },
     "engines" : {
         "node" : "latest",

@@ -391,7 +391,7 @@
                     "options" : {}
                 },
                 "properties" : {
-                    "type" : "rue",
+                    "type" : "Resource/rue",
                     "address" : "",
                     "label" : "Rue Saint Denis",
                     "description" : "<p>La rue Saint-Denis est l'une des plus anciennes rues de Paris&nbsp;: son axe est tracé dès le Ier siècle par les Romains. Elle s'étend vers le nord au Moyen Âge.</p> <p> <a href=\"#rue-saint-denis\" data-action-click=\"expandLayer\">Lire plus...</a> </p>",
