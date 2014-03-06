@@ -1,17 +1,41 @@
 (function(define) {
-    define([ 'underscore', 'jquery', 'q', 'L' ], function module(_, $, Q, L) {
+    define([ 'underscore', 'jquery', 'L' ], function module(_, $, L) {
+
+        /** Common namespace */
         var Mosaic = {};
 
-        // Trigger an event and/or a corresponding method name.
-        // Examples:
-        //
-        // `this.triggerMethod("foo")` will trigger the "foo" event and
-        // call the "onFoo" method.
-        //
-        // `this.triggerMethod("foo:bar") will trigger the "foo:bar"
-        // event and
-        // call the "onFooBar" method.
-        // MK: copy/paste from Marionette.triggerMethod
+        /* --------------------------------------------------- */
+        /* Mix-in methods */
+
+        /**
+         * A basic mix-in method used to defined the type of the parent class.
+         */
+        Mosaic.getType = function() {
+            var type = this.type = this.type || _.uniqueId('type-');
+            return type;
+        }
+        /**
+         * This mix-in method returns a unique identifier for instances of the
+         * parent class.
+         */
+        Mosaic.getId = function() {
+            var options = this.options = this.options || {};
+            var id = options.id = options.id || _.uniqueId('id-');
+            return id;
+        }
+
+        /**
+         * Trigger an event and/or a corresponding method name. Examples:
+         * 
+         * <ul>
+         * <li> `this.triggerMethod(&quot;foo&quot;)` will trigger the
+         * &quot;foo&quot; event and call the &quot;onFoo&quot; method.</li>
+         * <li> `this.triggerMethod(&quot;foo:bar&quot;) will trigger the
+         * &quot;foo:bar&quot; event and call the &quot;onFooBar&quot; method.</li>
+         * </ul>
+         * 
+         * This method was copied from Marionette.triggerMethod.
+         */
         Mosaic.triggerMethod = (function() {
             // split the event name on the :
             var splitter = /(^|:)(\w)/gi;
@@ -38,48 +62,76 @@
             return triggerMethod;
         })();
 
+        /** Listens to events produced by external objects */
+        Mosaic.listenTo = function(obj, event, handler, context) {
+            var listeners = this._listeners = this._listeners || [];
+            context = context || this;
+            obj.on(event, handler, context);
+            listeners.push({
+                obj : obj,
+                event : event,
+                handler : handler,
+                context : context
+            });
+        };
+
+        /** Removes all event listeners produced by external objects. */
+        Mosaic.stopListening = function() {
+            _.each(this._listeners, function(listener) {
+                var context = listener.context || this;
+                listener.obj.off(listener.event, listener.handler, context);
+            }, this);
+            delete this._listeners;
+        };
+
+        /* --------------------------------------------------- */
+        /* Static utility methods */
+
+        /** An utility method trimming string whitespaces. */
+        Mosaic.trim = function(str) {
+            return str.replace(/^\s+|\s+$/gim, '');
+        }
+
+        /**
+         * Converts the text content of the specified element into a JS object.
+         * This utility method could be used to convert JS code defined in
+         * <code>&lt;script>..&lt;script></code> elements into an object.
+         */
+        Mosaic.elementToObject = function(e) {
+            var results = [];
+            var that = this;
+            e.each(function() {
+                try {
+                    var text = $(this).text();
+                    text = Mosaic.trim(text);
+                    text = '( ' + text + ')';
+                    var obj = eval(text);
+                    if (_.isFunction(obj)) {
+                        obj = obj();
+                    }
+                    results.push(obj);
+                } catch (e) {
+                    console.log('ERROR!', e);
+                }
+            })
+            return results;
+        }
+
+        /* --------------------------------------------------- */
+
+        /** Common superclass for all other types. */
         Mosaic.Class = L.Class.extend({
+            /** Events triggering/listening */
             includes : L.Mixin.Events,
+            /** Trigger events and calls onXxx methods on this object. */
             triggerMethod : Mosaic.triggerMethod,
+            /** Sets options for this object. */
             setOptions : function(options) {
                 L.setOptions(this, options);
             }
         });
 
-        /**
-         * Return a promise for the data loaded from the specified URL
-         */
-        Mosaic.loadJson = function(url) {
-            var deferred = Q.defer();
-            $.get(url, function(data) {
-                deferred.resolve(data);
-            }).fail(function(error) {
-                deferred.reject(error);
-            });
-            return deferred.promise.then(function(data) {
-                return data;
-            });
-        }
-
         /* --------------------------------------------------- */
-        /* Mix-in methods */
-
-        /**
-         * A basic mix-in method used to defined the type of the parent class.
-         */
-        Mosaic.getType = function() {
-            var type = this.type = this.type || _.uniqueId('type-');
-            return type;
-        }
-        /**
-         * This mix-in method returns a unique identifier for instances of the
-         * parent class.
-         */
-        Mosaic.getId = function() {
-            var options = this.options = this.options || {};
-            var id = options.id = options.id || _.uniqueId('id-');
-            return id;
-        }
 
         /**
          * An adapter manager used to register/retrieve objects corresponding to
@@ -87,9 +139,11 @@
          * This object is used by views to get view adapters.
          */
         Mosaic.AdapterManager = Mosaic.Class.extend({
+            /** Initializes this object */
             initialize : function() {
                 this._adapters = {};
             },
+            /** Returns the type of the specified resource. */
             _getType : function(obj) {
                 var type;
                 if (_.isString(obj)) {
@@ -103,29 +157,53 @@
                 }
                 return type;
             },
+            /**
+             * Returns a key used to find adapters of one type to another.
+             * 
+             * @param from
+             *            the type of the adaptable object
+             * @param to
+             *            type of the target object
+             */
             _getKey : function(from, to) {
                 var fromType = this._getType(from);
                 var toType = this._getType(to);
                 return fromType + '-' + toType;
             },
+            /**
+             * Registers a new adapter from one type to another.
+             * 
+             * @param from
+             *            the type of the adaptable object
+             * @param to
+             *            type of the target object
+             * @param adapter
+             *            the adapter type
+             */
             registerAdapter : function(from, to, adapter) {
                 var key = this._getKey(from, to);
                 this._adapters[key] = adapter;
             },
+
+            /** Returns an adapter of one object type to another type. */
             getAdapter : function(from, to) {
                 var key = this._getKey(from, to);
                 return this._adapters[key];
             },
+            /**
+             * Creates and returns a new adapter from one type to another. If
+             * the registered adapter is a function then it is used as
+             * constructor to create a new object.
+             */
             newAdapterInstance : function(from, to) {
                 var AdapterType = this.getAdapter(from, to);
                 var result = null;
                 if (_.isFunction(AdapterType)) {
-                    var args = _.toArray(arguments);
-                    args.splice(0, 2);
                     result = new AdapterType();
                 }
                 return result;
             },
+            /** Removes an adapter from one type to another. */
             removeAdapter : function(from, to) {
                 var key = this._getKey(from, to);
                 var result = this._adapters[key];
@@ -133,12 +211,31 @@
                 return result;
             }
         });
+        /**
+         * A static method returning the singlethon instance of the
+         * AdapterManager.
+         */
         Mosaic.AdapterManager.getInstance = function() {
             if (!this._instance) {
                 this._instance = new Mosaic.AdapterManager();
             }
             return this._instance;
         }
+        /**
+         * This mixin method should be added to individual types to enable
+         * registering type-specific resource extensions. This method iterates
+         * over the specified resource types and registers the corresponding
+         * adapters. The type of the adapter is the same as the class where this
+         * mixin is added.
+         */
+        Mosaic._registerTypeAdapters = function(config) {
+            var adapterManager = Mosaic.AdapterManager.getInstance();
+            _.each(config, function(value, type) {
+                adapterManager.registerAdapter(type, this, value);
+            }, this);
+        }
+
+        /* --------------------------------------------------- */
 
         /**
          * A common super-class for all "data sets" giving access to resources.
@@ -208,6 +305,7 @@
             }
         });
 
+        /* --------------------------------------------------- */
         /**
          * This dataset is used as a wrapper for a collection of GeoJSON
          * objects.
@@ -296,6 +394,8 @@
             }
         });
 
+        /* --------------------------------------------------- */
+
         /**
          * This dataset corresponds to static map tiles. It don't have any
          * data/resources.
@@ -310,6 +410,8 @@
             }
         })
 
+        /* --------------------------------------------------- */
+
         /**
          * This dataset corresponds to interactive tiles (UTFGrid). It returns
          * all information loaded by the map represented in UTFGrid tiles.
@@ -317,6 +419,8 @@
         Mosaic.GeoUtfGridSet = Mosaic.TilesDataSet.extend({
             type : 'GeoUtfGridSet'
         });
+
+        /* --------------------------------------------------- */
 
         /**
          * An application is the central class managing communications between
@@ -373,42 +477,7 @@
                 }
             }
         })
-
-        /** Listens to events produced by external objects */
-        Mosaic.listenTo = function(obj, event, handler, context) {
-            var listeners = this._listeners = this._listeners || [];
-            context = context || this;
-            obj.on(event, handler, context);
-            listeners.push({
-                obj : obj,
-                event : event,
-                handler : handler,
-                context : context
-            });
-        };
-
-        /** Removes all event listeners produced by external objects. */
-        Mosaic.stopListening = function() {
-            _.each(this._listeners, function(listener) {
-                var context = listener.context || this;
-                listener.obj.off(listener.event, listener.handler, context);
-            }, this);
-            delete this._listeners;
-        };
-
-        /**
-         * This mixin method should be added to individual types to enable
-         * registering type-specific resource extensions. This method iterates
-         * over the specified resource types and registers the corresponding
-         * adapters. The type of the adapter is the same as the class where this
-         * mixin is added.
-         */
-        Mosaic._registerTypeAdapters = function(config) {
-            var adapterManager = Mosaic.AdapterManager.getInstance();
-            _.each(config, function(value, type) {
-                adapterManager.registerAdapter(type, this, value);
-            }, this);
-        }
+        /* --------------------------------------------------- */
 
         /**
          * Template-based view. It uses HTML templates to represent information.
@@ -504,7 +573,7 @@
                     var e = $(ev.target);
                     var actionName = e.attr(attrName);
                     var action = that[actionName];
-                    if (action) {
+                    if (_.isFunction(action)) {
                         action.call(that, ev, e);
                     }
                 });
@@ -631,35 +700,6 @@
 
         });
 
-        /* Static methods */
-        /** An utility method trimming string whitespaces. */
-        Mosaic.TemplateView._trim = function(str) {
-            return str.replace(/^\s+|\s+$/gim, '');
-        }
-        /**
-         * Converts the text content of the specified element into a JS object.
-         * This utility method could be used to convert JS code defined in
-         * <code>&lt;script>..&lt;script></code> elements into an object.
-         */
-        Mosaic.TemplateView._toObjects = function(e) {
-            var results = [];
-            var that = this;
-            e.each(function() {
-                try {
-                    var text = $(this).text();
-                    text = that._trim(text);
-                    text = '( ' + text + ')';
-                    var obj = eval(text);
-                    if (_.isFunction(obj)) {
-                        obj = obj();
-                    }
-                    results.push(obj);
-                } catch (e) {
-                    console.log('ERROR!', e);
-                }
-            })
-            return results;
-        }
         /**
          * Extends the specified TemplateView object with the HTML content
          * defined in the given element and with methods defined in "script"
@@ -667,29 +707,29 @@
          * instance methods) and "const" for static methods.
          */
         Mosaic.TemplateView.extendViewType = function(e, View) {
-            e = $(e);
-            View = View || this.extend();
-            // Define template methods
-            var objects = e.find('[data-type="methods"]');
-            _.each(this._toObjects(objects), function(obj) {
-                _.extend(View.prototype, obj);
-            }, this);
-            objects.remove();
+            e = $(e).clone();
+            View = View || this.extend({});
 
             // Define static constants
-            var objects = e.find('[data-type="const"]');
-            _.each(this._toObjects(objects), function(obj) {
+            var scripts = e.find('script[data-type="const"]');
+            _.each(Mosaic.elementToObject(scripts), function(obj) {
                 _.extend(View, obj);
             }, this);
-            objects.remove();
+            scripts.remove();
 
-            // The rest of the code is used as a
-            // template
-            var html = e.html() || e.text();
-            html = this._trim(html);
-            if (html != '') {
-                var tmpl = _.template(html);
-                View.prototype.template = tmpl;
+            // Define template methods
+            var scripts = e.find('script');
+            _.each(Mosaic.elementToObject(scripts), function(obj) {
+                _.extend(View.prototype, obj);
+            }, this);
+            // Remove all scripts
+            scripts.remove();
+
+            // The rest of the code is used as a template
+            var html = e.html();
+            html = Mosaic.trim(html);
+            if (html && html != '') {
+                View.prototype.template = html;
             }
             return View;
         }
@@ -901,6 +941,8 @@
          */
         Mosaic.MapFigureOptions.registerOptions = Mosaic._registerTypeAdapters;
 
+        /* ------------------------------------------------- */
+
         /** Visualization of the content in the popup view. */
         Mosaic.MapPopupView = Mosaic.TemplateView.extend({});
         /**
@@ -910,12 +952,19 @@
          */
         Mosaic.MapPopupView.registerViews = Mosaic._registerTypeAdapters;
 
+        /* ------------------------------------------------- */
+
         Mosaic.MapActivePopupView = Mosaic.MapPopupView.extend({
             type : 'MapActivePopupView'
         });
+
+        /* ------------------------------------------------- */
+
         Mosaic.MapFocusedPopupView = Mosaic.MapPopupView.extend({
             type : 'MapFocusedPopupView'
         });
+
+        /* ------------------------------------------------- */
 
         /** GeoJsonDataSet - MapView adapter */
         Mosaic.GeoJsonMapViewAdapter = Mosaic.ViewAdapter.extend({
@@ -1026,7 +1075,9 @@
 
         /* ------------------------------------------------- */
         /** Resource visualization in the list. */
-        Mosaic.ListItemView = Mosaic.TemplateView.extend({});
+        Mosaic.ListItemView = Mosaic.TemplateView.extend({
+            type : 'ListItemView'
+        });
         /**
          * An utility method used to register resource list views for multiple
          * resource types. The specified configuration object should contain
@@ -1069,6 +1120,8 @@
             }
         })
 
+        /* ------------------------------------------------- */
+
         /** Adapters of tilesets to the MapView */
         Mosaic.TileSetMapViewAdapter = Mosaic.ViewAdapter.extend({
             render : function(view, dataSet) {
@@ -1091,7 +1144,89 @@
             }
         })
 
-        /** Adapters registration */
+        /* ------------------------------------------------- */
+        /* Static utility methods */
+
+        /**
+         * This method iterates over all elements tagged with the
+         * "data-map-options" attribute and returns visualization options for
+         * figures visualized on maps.
+         */
+        Mosaic.registerMapOptions = function(html) {
+            html = $(html);
+            // This method recursively iterates over all parent elements and add
+            // all parameters defined in these elements.
+            function extendOptions(options, el, set) {
+                var id = el.attr('id') || _.uniqueId('template-');
+                el.attr('id', id);
+                // Check that the element id was not visited yet (to avoid
+                // infinite reference loops)
+                set = set || {};
+                if (id in set)
+                    return options;
+                set[id] = true;
+                var extendedType = el.attr('data-extends');
+                if (extendedType) {
+                    var parentEl = html.find(extendedType);
+                    options = extendOptions(options, parentEl, set);
+                }
+                var newOptions = Mosaic.elementToObject(el);
+                _.each(newOptions, function(opt) {
+                    _.extend(options, opt);
+                })
+                return options;
+            }
+            var adapterManager = Mosaic.AdapterManager.getInstance();
+            html.find('[data-map-options]').each(function() {
+                var el = $(this);
+                var from = el.attr('data-map-options');
+                var to = 'MapFigureOptions';
+                var options = extendOptions({}, el);
+                adapterManager.registerAdapter(from, to, options);
+            })
+        }
+
+        /**
+         * This method iterates over all elements tagged with the "data-view"
+         * attribute and transforms these elements into interactive views used
+         * to visualize resources in various modes (on the map, in popups in the
+         * list in the full view etc).
+         */
+        Mosaic.registerViewAdapters = function(html) {
+            html = $(html);
+            // This method recursively iterates over all parent elements and add
+            // all methods defined in these elements.
+            function extendViewType(ViewType, el, set) {
+                var id = el.attr('id') || _.uniqueId('template-');
+                el.attr('id', id);
+                // Check that the element id was not visited yet (to avoid
+                // infinite reference loops).
+                set = set || {};
+                if (id in set)
+                    return ViewType;
+                set[id] = true;
+                var extendedType = el.attr('data-extends');
+                if (extendedType) {
+                    var parentViewEl = html.find(extendedType);
+                    ViewType = extendViewType(ViewType, parentViewEl, set);
+                }
+                return ViewType.extendViewType(el, ViewType);
+            }
+            var adapterManager = Mosaic.AdapterManager.getInstance();
+            html.find('[data-view]').each(
+                    function() {
+                        var el = $(this);
+                        var from = el.attr('data-resource-type');
+                        var to = el.attr('data-view');
+                        var ViewType = extendViewType(Mosaic.ResourceView
+                                .extend({}), el);
+                        adapterManager.registerAdapter(from, to, ViewType);
+                    })
+        }
+
+        /* ------------------------------------------------- */
+        /** Default adapters registration */
+
         var adapters = Mosaic.AdapterManager.getInstance();
         adapters.registerAdapter(Mosaic.MapView, Mosaic.TilesDataSet,
                 Mosaic.TileSetMapViewAdapter);
