@@ -214,6 +214,7 @@
          */
         Mosaic.GeoJsonDataSet = Mosaic.DataSet.extend({
             type : 'GeoJsonDataSet',
+            /** Returns the underlying list of resources. */
             getResources : function() {
                 var data = this.options.data;
                 var list = data && _.isArray(data.features) ? data.features
@@ -221,6 +222,12 @@
                 list = _.toArray(list);
                 return list;
             },
+            /**
+             * A private method checking if the specified resources are the same
+             * or not. This method returns <code>true</code> if both
+             * parameters are the same object or if they have the same
+             * identifier.
+             */
             _isSame : function(first, second) {
                 if (!first || !second)
                     return false;
@@ -230,6 +237,7 @@
                     return true;
                 return false;
             },
+            /** Focus the specified resource and fires the "focus" event. */
             focus : function(resource, force) {
                 if (this._isSame(this._focused, resource) && !force) {
                     return;
@@ -239,18 +247,25 @@
                 }
                 this._focused = resource;
                 this.triggerMethod('focus', {
-                    resource : resource
+                    resource : resource,
+                    dataSet : this
                 });
             },
+            /**
+             * Blurs the focus from the specified resource (if it was previously
+             * focused) and fires the "blur" event.
+             */
             blur : function(resource) {
                 if (this._isSame(this._focused, resource)) {
                     var r = this._focused;
                     delete this._focused;
                     this.triggerMethod('blur', {
-                        resource : r
+                        resource : r,
+                        dataSet : this
                     });
                 }
             },
+            /** Activates the specified resource and fires the "activate" event. */
             activate : function(resource, force) {
                 if (this._isSame(this._active, resource) && !force) {
                     return;
@@ -261,15 +276,21 @@
                 this.focus(resource);
                 this._active = resource;
                 this.triggerMethod('activate', {
-                    resource : resource
+                    resource : resource,
+                    dataSet : this
                 });
             },
+            /**
+             * Deactivates previously activated resource and fires the
+             * "deactivate" event.
+             */
             deactivate : function(resource) {
                 if (this._isSame(this._active, resource)) {
                     var r = this._active;
                     delete this._active;
                     this.triggerMethod('deactivate', {
-                        resource : r
+                        resource : r,
+                        dataSet : this
                     });
                 }
             }
@@ -315,14 +336,14 @@
                 });
                 _.each(this._dataSets, function(dataSet) {
                     this.triggerMethod('dataSet:add', {
-                        data : dataSet
+                        dataSet : dataSet
                     });
                 }, this);
             },
             stop : function() {
                 _.each(this._dataSets, function(dataSet) {
                     this.triggerMethod('dataSet:remove', {
-                        data : dataSet
+                        dataSet : dataSet
                     });
                 }, this);
                 this._started = false;
@@ -338,7 +359,7 @@
                 this._dataSets[id] = dataSet;
                 if (this._started) {
                     this.triggerMethod('dataSet:add', {
-                        data : dataSet
+                        dataSet : dataSet
                     });
                 }
             },
@@ -347,7 +368,7 @@
                 if (dataSet) {
                     delete this._dataSets[id];
                     this.triggerMethod('dataSet:remove', {
-                        data : dataSet
+                        dataSet : dataSet
                     });
                 }
             }
@@ -417,7 +438,7 @@
             },
 
             /**
-             * Returns the DOM element used as a container for the map.
+             * Returns the topmost DOM element of this view.
              */
             getElement : function() {
                 if (!this.$el) {
@@ -427,18 +448,104 @@
                 return this.$el;
             },
 
+            /**
+             * This is a default rendering method which is called if a method
+             * referenced in the "data-render" attribute was not found.
+             */
             renderDefault : function(el, methodName) {
                 var err = new Error('[' + methodName
                         + ']: Renderer method not found.');
                 console.log(err, el);
             },
 
+            /**
+             * This is a default method which is called after rendering if a
+             * method referenced in the "data-rendered" attribute was not found.
+             */
             renderedDefault : function(el, methodName) {
                 var err = new Error('[' + methodName + ']: Method called '
                         + 'after the rendering process ' + 'is not defined.');
                 console.log(err, el);
             },
 
+            /**
+             * Public method rendering the specified element. This method seeks
+             * all elements containing "data-render" attributes and calls
+             * functions referenced by this attribute. When the rendering
+             * process is finished then this method calls all functions
+             * referenced by the "data-rendered" attribute. Referenced functions
+             * should be defined in this view and they has to accept one
+             * parameter - a reference to the rendered element.
+             */
+            renderElement : function(elm, render) {
+                var list = [];
+                this._renderElement(elm, render, list);
+                // Notify about the end of the rendering process
+                _.each(list, function(e) {
+                    this._callReferencedMethod(e, 'data-rendered',
+                            'renderedDefault');
+                }, this)
+            },
+
+            /**
+             * Binds event listeners to elements marked by "data-action-xxx"
+             * attributes (where "xxx" is the name of the action). The value of
+             * this action attributes should reference event listeners defined
+             * in this view. Example:
+             * <code>&lt;div data-action-click="sayHello">Hello&lt;/div></code>
+             */
+            bindListeners : function(elm, event, attrName) {
+                if (attrName === undefined) {
+                    attrName = 'data-action-' + event;
+                }
+                var that = this;
+                var selector = '[' + attrName + ']';
+                elm.on(event, selector, function(ev) {
+                    var e = $(ev.target);
+                    var actionName = e.attr(attrName);
+                    var action = that[actionName];
+                    if (action) {
+                        action.call(that, ev, e);
+                    }
+                });
+            },
+
+            /**
+             * This method renders this view. It performs the following actions:
+             * 1) it takes the topmost element of this class (using the
+             * "getElement" method) 2) If there is a "template" field defined in
+             * this object then it is used as a source for the
+             * underscore#template method to render the content; the result of
+             * template rendering is appended to the view's element. 3) This
+             * method calls all functions referenced in the "data-render" fields
+             * 4) After rendering it calls functions referenced in the
+             * "data-rendered" element attributes (to finalize the rendering
+             * process). 5) It attaches event listeners referenced by the
+             * "data-action-xxx" attributes.
+             */
+            render : function() {
+                var that = this;
+                that.triggerMethod('render:begin');
+                that._render();
+                that._bindEventListeners();
+                that.triggerMethod('render:end');
+                return this;
+            },
+
+            /** Removes all registered listeners and removes this view from DOM. */
+            remove : function() {
+                this.stopListening();
+                var element = view.getElement();
+                element.remove();
+                return this;
+            },
+
+            /* ----------------------------- */
+
+            /**
+             * This method calls a method of this view referenced by the
+             * specified element attribute.
+             */
             _callReferencedMethod : function(elm, field, def) {
                 var result = null;
                 var methodName = elm.attr(field);
@@ -452,6 +559,16 @@
                 return result;
             },
 
+            /**
+             * This internal method renders the specified element. It is called
+             * by the public "renderElement" method. This method seeks all
+             * elements containing "data-render" attributes and calls functions
+             * referenced by this attribute. When the rendering process is
+             * finished then this method calls all functions referenced by the
+             * "data-rendered" attribute. Referenced functions should be defined
+             * in this view and they has to accept one parameter - a reference
+             * to the rendered element.
+             */
             _renderElement : function(elm, render, list) {
                 var visit = true;
                 if (render !== false) {
@@ -471,46 +588,29 @@
                 this.triggerMethod('render');
             },
 
-            renderElement : function(elm, render) {
-                var list = [];
-                this._renderElement(elm, render, list);
-                // Notify about the end of the rendering process
-                _.each(list, function(e) {
-                    this._callReferencedMethod(e, 'data-rendered',
-                            'renderedDefault');
-                }, this)
-            },
-
-            bindListeners : function(elm, event, attrName) {
-                if (attrName === undefined) {
-                    attrName = 'data-action-' + event;
-                }
-                var that = this;
-                var selector = '[' + attrName + ']';
-                elm.on(event, selector, function(ev) {
-                    var e = $(ev.target);
-                    var actionName = e.attr(attrName);
-                    var action = that[actionName];
-                    if (action) {
-                        action.call(that, ev, e);
-                    }
-                });
-            },
-            render : function() {
-                var that = this;
-                that.triggerMethod('render:begin');
-                that._render();
-                that._bindEventListeners();
-                that.triggerMethod('render:end');
-                return this;
-            },
+            /**
+             * Binds event listeners referenced in "data-action-xxx" element
+             * attributes (where "xxx" is "click", "mouseover", "mouseout",
+             * "focus", "blur", "keypress", "keydown", "keyup"...).
+             */
             _bindEventListeners : function() {
                 var that = this;
                 var element = this.getElement();
                 that.bindListeners(element, 'click');
                 that.bindListeners(element, 'mouseover');
                 that.bindListeners(element, 'mouseout');
+                that.bindListeners(element, 'focus');
+                that.bindListeners(element, 'blur');
+                that.bindListeners(element, 'keypress');
+                that.bindListeners(element, 'keydown');
+                that.bindListeners(element, 'keyup');
             },
+
+            /**
+             * Renders the topmost element. This method is called from the
+             * public "render" method (see the description in this method). This
+             * method does not fires any events.
+             */
             _render : function() {
                 var that = this;
                 var element = that.getElement();
@@ -529,18 +629,18 @@
                 return that;
             },
 
-            remove : function() {
-                var element = view.getElement();
-                element.remove();
-                this.stopListening();
-                return this;
-            }
         });
 
         /* Static methods */
+        /** An utility method trimming string whitespaces. */
         Mosaic.TemplateView._trim = function(str) {
             return str.replace(/^\s+|\s+$/gim, '');
         }
+        /**
+         * Converts the text content of the specified element into a JS object.
+         * This utility method could be used to convert JS code defined in
+         * <code>&lt;script>..&lt;script></code> elements into an object.
+         */
         Mosaic.TemplateView._toObjects = function(e) {
             var results = [];
             var that = this;
@@ -560,6 +660,12 @@
             })
             return results;
         }
+        /**
+         * Extends the specified TemplateView object with the HTML content
+         * defined in the given element and with methods defined in "script"
+         * elements marked by attributes "data-type" equal to "methods" (for
+         * instance methods) and "const" for static methods.
+         */
         Mosaic.TemplateView.extendViewType = function(e, View) {
             e = $(e);
             View = View || this.extend();
@@ -645,7 +751,7 @@
              * application.
              */
             onAddDataSet : function(e) {
-                var dataSet = e.data;
+                var dataSet = e.dataSet;
                 var adapters = Mosaic.AdapterManager.getInstance();
                 var adapter = adapters.newAdapterInstance(this, dataSet);
                 if (adapter && adapter.render) {
@@ -659,7 +765,7 @@
              * application.
              */
             onRemoveDataSet : function(e) {
-                var dataSet = e.data;
+                var dataSet = e.dataSet;
                 var adapter = this.getEntity(dataSet.getId());
                 if (adapter && adapter.remove) {
                     adapter.remove();
@@ -818,15 +924,15 @@
             },
             _showPopup : function(e, AdapterType) {
                 var resource = e.resource;
-                var id = this._data.getResourceId(resource);
+                var id = this._dataSet.getResourceId(resource);
                 var layer = this._index[id];
                 if (layer) {
-                    var ViewType = this._data.getResourceAdapter(resource,
+                    var ViewType = this._dataSet.getResourceAdapter(resource,
                             AdapterType);
                     if (ViewType) {
                         var view = new ViewType({
                             resource : resource,
-                            data : this._data,
+                            dataSet : this._dataSet,
                             parentView : this._view
                         });
                         var element = view.getElement();
@@ -838,23 +944,23 @@
             },
 
             _bindDataEventListeners : function() {
-                this.listenTo(this._data, 'activate', function(e) {
+                this.listenTo(this._dataSet, 'activate', function(e) {
                     this._showPopup(e, Mosaic.MapActivePopupView);
                 });
-                this.listenTo(this._data, 'deactivate', function(e) {
+                this.listenTo(this._dataSet, 'deactivate', function(e) {
                     // console.log('* Deactivate: ', e)
                 })
-                this.listenTo(this._data, 'focus', _.debounce(function(e) {
+                this.listenTo(this._dataSet, 'focus', _.debounce(function(e) {
                     this._showPopup(e, Mosaic.MapFocusedPopupView);
                 }, 100));
-                this.listenTo(this._data, 'blur', function(e) {
+                this.listenTo(this._dataSet, 'blur', function(e) {
                     // console.log('* Blur: ', e)
                 })
             },
 
-            render : function(view, data) {
+            render : function(view, dataSet) {
                 this._view = view;
-                this._data = data;
+                this._dataSet = dataSet;
                 var map = view.getMap();
                 var that = this;
 
@@ -864,32 +970,32 @@
                         return new L.Marker(latlng);
                     },
                     style : function(resource) {
-                        var options = that._data.getResourceAdapter(resource,
-                                Mosaic.MapFigureOptions)
+                        var options = that._dataSet.getResourceAdapter(
+                                resource, Mosaic.MapFigureOptions)
                                 || {};
                         if (_.isFunction(options)) {
-                            options = options.call(options, that._data,
+                            options = options.call(options, that._dataSet,
                                     resource);
                         }
                         return options;
                     },
                     onEachFeature : function(resource, layer) {
-                        var resourceId = data.getResourceId(resource);
+                        var resourceId = that._dataSet.getResourceId(resource);
                         that._index[resourceId] = layer;
                         layer.on('mouseover', function() {
-                            that._data.focus(resource);
+                            that._dataSet.focus(resource);
                         })
                         layer.on('mouseout', function() {
-                            that._data.blur(resource);
+                            that._dataSet.blur(resource);
                         })
                         layer.on('click', function() {
-                            that._data.activate(resource);
+                            that._dataSet.activate(resource);
                         })
                     }
                 };
 
                 this._groupLayer = new L.FeatureGroup();
-                _.each(data.getResources(), function(feature) {
+                _.each(this._dataSet.getResources(), function(feature) {
                     var geom = feature.geometry;
                     if (!geom || !geom.coordinates || !geom.coordinates.length)
                         return false;
@@ -899,7 +1005,8 @@
                     }
                 });
 
-                var list = _.filter(data.getResources(), function(resource) {
+                var list = _.filter(that._dataSet.getResources(), function(
+                        resource) {
                     var geom = resource.geometry;
                     if (!geom || !geom.coordinates || !geom.coordinates.length)
                         return false;
@@ -930,23 +1037,24 @@
         /* ------------------------------------------------- */
         /** GeoJsonDataSet - ListView adapter */
         Mosaic.GeoJsonListViewAdapter = Mosaic.ViewAdapter.extend({
-            render : function(view, data) {
+            /** Renders the specified dataset on the view (on the list). */
+            render : function(view, dataSet) {
                 this._view = view;
-                this._data = data;
+                this._dataSet = dataSet;
                 this._container = $('<div></div>');
                 var element = this._view.getElement();
                 element.append(this._container);
-                var list = data.getResources();
+                var list = this._dataSet.getResources();
                 list = _.toArray(list);
                 var that = this;
                 _.each(list, function(resource) {
                     var str = JSON.stringify(resource.properties.label);
-                    var ViewType = this._data.getResourceAdapter(resource,
+                    var ViewType = this._dataSet.getResourceAdapter(resource,
                             Mosaic.ListItemView);
                     if (ViewType) {
                         var view = new ViewType({
                             resource : resource,
-                            data : this._data,
+                            dataSet : this._dataSet,
                             parentView : this._view
                         });
                         this._container.append(view.getElement());
@@ -954,6 +1062,7 @@
                     }
                 }, this);
             },
+            /** Removes all rendered resources from the list. */
             remove : function() {
                 this.stopListening();
                 this._container.remove();
@@ -962,13 +1071,13 @@
 
         /** Adapters of tilesets to the MapView */
         Mosaic.TileSetMapViewAdapter = Mosaic.ViewAdapter.extend({
-            render : function(view, data) {
+            render : function(view, dataSet) {
                 this._view = view;
-                this._data = data;
+                this._dataSet = dataSet;
                 var map = this._view.getMap();
                 var maxZoom = this._view.getMaxZoom();
-                var attribution = this._data.getAttribution();
-                var tilesUrl = this._data.getTilesUrl();
+                var attribution = this._dataSet.getAttribution();
+                var tilesUrl = this._dataSet.getTilesUrl();
                 this._layer = L.tileLayer(tilesUrl, {
                     attribution : attribution,
                     maxZoom : maxZoom

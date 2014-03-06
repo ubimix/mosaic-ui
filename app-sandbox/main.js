@@ -41,21 +41,40 @@
 
         Mosaic.ResourceView = Mosaic.TemplateView
                 .extend({
+                    getResource : function() {
+                        return this.options.resource;
+                    },
+                    getDataSet : function() {
+                        return this.options.dataSet;
+                    },
+                    activateResource : function(ev) {
+                        this.options.dataSet.activate(this.options.resource);
+                    },
+                    deactivateResource : function(ev) {
+                        this.options.dataSet.deactivate(this.options.resource);
+                    },
+                    focusResource : function(ev) {
+                        this.options.dataSet.focus(this.options.resource);
+                    },
+                    blurResource : function(ev) {
+                        this.options.dataSet.blur(this.options.resource);
+                    },
+
+                    /* -- */
                     template : '' + '<div>' + '<h3 data-render="renderTitle" '
-                            + ' data-action-click="activateResource"></h3>'
+                            + ' data-action-click="activateResource" '
+                            + ' data-action-mouseover="focusResource"></h3>'
                             + '<div data-render="renderDescription"></div>'
                             + +'</div>',
-                    renderTitle : function(el) {
-                        var resource = this.options.resource;
-                        el.text(resource.properties.label);
-                    },
                     renderDescription : function(el) {
                         var resource = this.options.resource;
                         el.html(resource.properties.description);
                     },
-                    activateResource : function(ev) {
-                        this.options.data.activate(this.options.resource);
-                    }
+                    renderTitle : function(el) {
+                        var resource = this.options.resource;
+                        el.text(resource.properties.label);
+                    },
+
                 });
 
         Mosaic.MapFocusedPopupView.registerViews({
