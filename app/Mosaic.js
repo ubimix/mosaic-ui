@@ -87,9 +87,33 @@
         /* --------------------------------------------------- */
         /* Static utility methods */
 
-        /** An utility method trimming string whitespaces. */
-        Mosaic.trim = function(str) {
-            return str.replace(/^\s+|\s+$/gim, '');
+        Mosaic.Utils = {
+            /** An utility method trimming string whitespaces. */
+            trim : function(str) {
+                return str.replace(/^\s+|\s+$/gim, '');
+            },
+            /**
+             * Checks the given options object, interprets it (if it is a
+             * function) and returns non-null resulting value.
+             */
+            getOptions : function(options) {
+                if (_.isFunction(options)) {
+                    options = options();
+                } else {
+                    options = options || {};
+                }
+                return options;
+            },
+
+            /** Returns an option value corresponding to the specified key. */
+            getOption : function(options, key) {
+                options = this.getOptions(options);
+                var value = options[key];
+                if (_.isFunction(value)) {
+                    value = value.call(options);
+                }
+                return value;
+            }
         }
 
         /**
@@ -103,7 +127,7 @@
             e.each(function() {
                 try {
                     var text = $(this).text();
-                    text = Mosaic.trim(text);
+                    text = Mosaic.Utils.trim(text);
                     text = '( ' + text + ')';
                     var obj = eval(text);
                     if (_.isFunction(obj)) {
@@ -568,7 +592,7 @@
             renderDefault : function(el, methodName) {
                 var err = new Error('[' + methodName
                         + ']: Renderer method not found.');
-                console.log(err, el);
+                console.log(err.stack, el);
             },
 
             /**
@@ -578,7 +602,7 @@
             renderedDefault : function(el, methodName) {
                 var err = new Error('[' + methodName + ']: Method called '
                         + 'after the rendering process ' + 'is not defined.');
-                console.log(err, el);
+                console.log(err.stack, el);
             },
 
             /**
@@ -771,7 +795,7 @@
 
             // The rest of the code is used as a template
             var html = e.html();
-            html = Mosaic.trim(html);
+            html = Mosaic.Utils.trim(html);
             if (html && html != '') {
                 View.prototype.template = html;
             }
@@ -903,6 +927,26 @@
 
         /* ------------------------------------------------- */
 
+        /**
+         * This mixin method is used to create and return a view corresponding
+         * to the specified resource and a ViewType. This method should be used
+         * as a class method.
+         */
+        Mosaic.newResourceView = function(Type, resource, parentView) {
+            var result = null;
+            var View = this._dataSet.getResourceAdapter(resource, Type);
+            if (View) {
+                result = new View({
+                    resource : resource,
+                    dataSet : this._dataSet,
+                    parentView : parentView
+                });
+            }
+            return result;
+        };
+
+        /* ------------------------------------------------- */
+
         /** A view responsible for the map visualization. */
         Mosaic.MapView = Mosaic.DataSetView.extend({
             type : 'MapView',
@@ -1020,8 +1064,25 @@
 
         /* ------------------------------------------------- */
 
+        /** This view is used to create customized markers */
+        Mosaic.MapMarkerView = Mosaic.ResourceView.extend({
+            type : 'MapMarkerView',
+        });
+
+        /**
+         * This method returns <code>true</code> if the marker object contains
+         * a visual HTML representation for a map marker or it is used just as a
+         * source of marker options.
+         */
+        Mosaic.MapMarkerView.isHtmlMarker = function(view) {
+            return view.template ? true : false;
+        }
+
+        /* ------------------------------------------------- */
+
         /** Visualization of the content in the popup view. */
         Mosaic.MapPopupView = Mosaic.TemplateView.extend({});
+
         /**
          * An utility method used to register popup views for multiple resource
          * types. The specified configuration object should contain resource
@@ -1055,6 +1116,9 @@
                 this._index = {};
             },
 
+            /** Creates and returns a new rsource view */
+            newResourceView : Mosaic.newResourceView,
+
             /**
              * An internal method showing a popup with the rendered resource.
              * Resource view depends on the mode of visualization (which is
@@ -1062,6 +1126,7 @@
              */
             _showPopup : function(e, AdapterType) {
                 var resource = this._dataSet.getResourceFromEvent(e);
+                console.log(AdapterType.prototype.type, resource)
                 var id = this._dataSet.getResourceId(resource);
 
                 var layer = this._index[id];
@@ -1070,73 +1135,59 @@
                 if (!layer) {
                     return;
                 }
-                // Loads a view type for the specified resource.
-                var ViewType = this._dataSet.getResourceAdapter(resource,
-                        AdapterType);
+
+                /* Creates a view for this resource */
+                var view = this.newResourceView(AdapterType, resource,
+                        this._view);
                 // Exit if there is no visualization defined for the current
                 // resource type
-                if (!ViewType) {
+                if (!view) {
                     return;
                 }
 
+                // Get popup options from the view
+                var options = Mosaic.Utils.getOptions(view.popupOptions);
+
                 // Create a popup if it does not exist yet
-                if (!this._popup) {
-                    this._popup = L.popup();
-                    // Make a copy of default options
-                    this._popup._defaultOptions = _.extend({},
-                            this._popup.options);
-                }
+                var popup = L.popup(options);
 
                 var that = this;
                 var showPopup = null;
-                if (e.coords) {
+                if (!layer._ismarker && e.coords) {
                     // Set the coordinates of the event for the popup.
                     var lat = e.coords[1];
                     var lng = e.coords[0];
                     var latlng = L.latLng(lat, lng);
-                    this._popup.setLatLng(latlng);
+                    popup.setLatLng(latlng);
                     showPopup = function() {
                         var map = that._view.getMap();
-                        that._popup.openOn(map);
+                        popup.openOn(map);
                     }
                 } else {
                     // If the event does not contain coordinates - then try to
                     // bind the popup to the layer
                     showPopup = function() {
-                        layer.bindPopup(that._popup).openPopup();
+                        layer.bindPopup(popup).openPopup();
                     }
                 }
                 if (!showPopup) {
                     return;
                 }
 
-                // Create a new view to set in the popup
-                var view = new ViewType({
-                    resource : resource,
-                    dataSet : this._dataSet,
-                    parentView : this._view
-                });
-
-                // Get popup options from the view
-                var options;
-                if (_.isFunction(view.popupOptions)) {
-                    options = view.popupOptions();
-                } else {
-                    options = view.popupOptions || {};
-                }
-                options = _.extend({}, this._popup._defaultOptions, options);
-                this._popup.options = options;
                 view.render();
 
                 // Set the popup content
                 var element = view.getElement();
-                this._popup.setContent(element[0]);
+                popup.setContent(element[0]);
 
                 // Open the popup
-                showPopup();
+                var map = that._view.getMap();
+                map.closePopup();
+                setTimeout(showPopup, 10);
+
 
                 // Re-set the content (to adjust the view).
-                this._popup.setContent(element[0]);
+                popup.setContent(element[0]);
             },
 
             /**
@@ -1197,8 +1248,28 @@
 
                 var geoJsonOptions = {
                     pointToLayer : function(resource, latlng) {
-                        // TODO: Add to the point layer
-                        return new L.Marker(latlng);
+                        var options = _.extend({}, resource.geometry.options);
+                        /* Creates a view for this resource */
+                        var view = that.newResourceView(Mosaic.MapMarkerView,
+                                resource, that._view);
+                        if (view) {
+                            options = _.extend(options, Mosaic.Utils
+                                    .getOptions(view.options));
+                            var iconOptions = Mosaic.Utils
+                                    .getOptions(view.icon)
+                            if (Mosaic.MapMarkerView.isHtmlMarker(view)) {
+                                view.render();
+                                iconOptions.html = view.getElement().html();
+                                if (!iconOptions.className)
+                                    iconOptions.className = '';
+                                options.icon = L.divIcon(iconOptions);
+                            } else if (iconOptions.iconUrl) {
+                                options.icon = L.icon(iconOptions);
+                            }
+                        }
+                        var layer = new L.Marker(latlng, options);
+                        layer._ismarker = true;
+                        return layer;
                     },
                     style : function(resource) {
                         var options = that._dataSet.getResourceAdapter(
@@ -1252,6 +1323,7 @@
         Mosaic.ListItemView = Mosaic.TemplateView.extend({
             type : 'ListItemView'
         });
+
         /**
          * An utility method used to register resource list views for multiple
          * resource types. The specified configuration object should contain
@@ -1262,6 +1334,10 @@
         /* ------------------------------------------------- */
         /** GeoJsonDataSet - ListView adapter */
         Mosaic.GeoJsonListViewAdapter = Mosaic.ViewAdapter.extend({
+
+            /** Creates and returns a new rsource view */
+            newResourceView : Mosaic.newResourceView,
+
             /** Renders the specified dataset on the view (on the list). */
             render : function(view, dataSet) {
                 this._view = view;
@@ -1273,15 +1349,9 @@
                 list = _.toArray(list);
                 var that = this;
                 _.each(list, function(resource) {
-                    var str = JSON.stringify(resource.properties.label);
-                    var ViewType = this._dataSet.getResourceAdapter(resource,
-                            Mosaic.ListItemView);
-                    if (ViewType) {
-                        var view = new ViewType({
-                            resource : resource,
-                            dataSet : this._dataSet,
-                            parentView : this._view
-                        });
+                    var view = this.newResourceView(Mosaic.ListItemView,
+                            resource, this._view);
+                    if (view) {
                         this._container.append(view.getElement());
                         view.render();
                     }
