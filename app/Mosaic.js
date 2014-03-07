@@ -242,8 +242,10 @@
          * Each dataset could be seen as a collection of resources.
          */
         Mosaic.DataSet = Mosaic.Class.extend({
+
             /** Returns a unique identifier of this dataset */
             getId : Mosaic.getId,
+
             /**
              * Returns the logical type of this dataset. This value should be
              * defined as a "type" field in subclasses.
@@ -257,6 +259,7 @@
                 this.setOptions(options);
                 this._dataSets = {};
             },
+
             /**
              * Returns a static adapter for the specified resource. If there is
              * no adapters were found for the resource type then this method
@@ -273,6 +276,7 @@
                 }
                 return adapter;
             },
+
             /**
              * Returns an identifier of the specified resource. If the given
              * resource does not have one then this method creates and adds a
@@ -282,6 +286,15 @@
                 var id = resource.id = resource.id || _.uniqueId('id-');
                 return id;
             },
+
+            /**
+             * Returns a resource corresponding to the specified event. This
+             * event should be fired by this data set.
+             */
+            getResourceFromEvent : function(event) {
+                return event.resource;
+            },
+
             /**
              * Returns a string representing a type of the specified resource.
              */
@@ -292,6 +305,7 @@
                 var type = properties.type;
                 return type || 'Resource';
             },
+
             /** Returns a parent for the specified type. */
             getParentResourceType : function(type) {
                 if (!type || type == '')
@@ -302,24 +316,64 @@
                 else
                     type = null;
                 return type;
-            }
-        });
-
-        /* --------------------------------------------------- */
-        /**
-         * This dataset is used as a wrapper for a collection of GeoJSON
-         * objects.
-         */
-        Mosaic.GeoJsonDataSet = Mosaic.DataSet.extend({
-            type : 'GeoJsonDataSet',
-            /** Returns the underlying list of resources. */
-            getResources : function() {
-                var data = this.options.data;
-                var list = data && _.isArray(data.features) ? data.features
-                        : data;
-                list = _.toArray(list);
-                return list;
             },
+
+            /** Focus the specified resource and fires the "focus" event. */
+            focusResource : function(event) {
+                var resource = this.getResourceFromEvent(event);
+                if (this._isSame(this._focused, resource) && !event.force) {
+                    return;
+                }
+                if (this._focused) {
+                    this.blurResource(this.newEvent({
+                        resource : this._focused
+                    }));
+                }
+                this._focused = resource;
+                this.triggerMethod('focusResource', event);
+            },
+
+            /**
+             * Blurs the focus from the specified resource (if it was previously
+             * focused) and fires the "blur" event.
+             */
+            blurResource : function(event) {
+                var resource = this.getResourceFromEvent(event);
+                if (this._isSame(this._focused, resource)) {
+                    delete this._focused;
+                    this.triggerMethod('blurResource', event);
+                }
+            },
+
+            /** Activates the specified resource and fires the "activate" event. */
+            activateResource : function(event) {
+                var resource = this.getResourceFromEvent(event);
+                if (this._isSame(this._active, resource) && !event.force) {
+                    return;
+                }
+                if (this._active) {
+                    this.deactivateResource(this.newEvent({
+                        resource : this._active
+                    }));
+                }
+                this.focusResource(event);
+                this._active = resource;
+                this.triggerMethod('activateResource', event);
+            },
+
+            /**
+             * Deactivates previously activated resource and fires the
+             * "deactivate" event.
+             */
+            deactivateResource : function(event) {
+                var resource = this.getResourceFromEvent(event);
+                if (this._isSame(this._active, resource)) {
+                    var r = this._active;
+                    delete this._active;
+                    this.triggerMethod('deactivateResource', event);
+                }
+            },
+
             /**
              * A private method checking if the specified resources are the same
              * or not. This method returns <code>true</code> if both
@@ -335,63 +389,31 @@
                     return true;
                 return false;
             },
-            /** Focus the specified resource and fires the "focus" event. */
-            focus : function(resource, force) {
-                if (this._isSame(this._focused, resource) && !force) {
-                    return;
-                }
-                if (this._focused) {
-                    this.blur(this._focused);
-                }
-                this._focused = resource;
-                this.triggerMethod('focus', {
-                    resource : resource,
-                    dataSet : this
-                });
-            },
-            /**
-             * Blurs the focus from the specified resource (if it was previously
-             * focused) and fires the "blur" event.
-             */
-            blur : function(resource) {
-                if (this._isSame(this._focused, resource)) {
-                    var r = this._focused;
-                    delete this._focused;
-                    this.triggerMethod('blur', {
-                        resource : r,
-                        dataSet : this
-                    });
-                }
-            },
-            /** Activates the specified resource and fires the "activate" event. */
-            activate : function(resource, force) {
-                if (this._isSame(this._active, resource) && !force) {
-                    return;
-                }
-                if (this._active) {
-                    this.deactivate(this._active);
-                }
-                this.focus(resource);
-                this._active = resource;
-                this.triggerMethod('activate', {
-                    resource : resource,
-                    dataSet : this
-                });
-            },
-            /**
-             * Deactivates previously activated resource and fires the
-             * "deactivate" event.
-             */
-            deactivate : function(resource) {
-                if (this._isSame(this._active, resource)) {
-                    var r = this._active;
-                    delete this._active;
-                    this.triggerMethod('deactivate', {
-                        resource : r,
-                        dataSet : this
-                    });
-                }
+
+            /** Create and returns an event for the specified resource */
+            newEvent : function(event) {
+                event.dataSet = this;
+                return event;
             }
+        });
+
+        /* --------------------------------------------------- */
+        /**
+         * This dataset is used as a wrapper for a collection of GeoJSON
+         * objects.
+         */
+        Mosaic.GeoJsonDataSet = Mosaic.DataSet.extend({
+            type : 'GeoJsonDataSet',
+
+            /** Returns the underlying list of resources. */
+            getResources : function() {
+                var data = this.options.data;
+                var list = data && _.isArray(data.features) ? data.features
+                        : data;
+                list = _.toArray(list);
+                return list;
+            },
+
         });
 
         /* --------------------------------------------------- */
@@ -429,10 +451,17 @@
          * the data according to their types.
          */
         Mosaic.App = Mosaic.Class.extend({
+
+            /** Initializes this application and creates internal fields. */
             initialize : function(options) {
                 this.setOptions(options);
                 this._dataSets = {};
             },
+
+            /**
+             * Starts this application and notifies listeners using the "start"
+             * event.
+             */
             start : function() {
                 this._started = true;
                 this.triggerMethod('start', {
@@ -444,6 +473,11 @@
                     });
                 }, this);
             },
+
+            /**
+             * Stops the application and notifies registered listeners with the
+             * "stop" event.
+             */
             stop : function() {
                 _.each(this._dataSets, function(dataSet) {
                     this.triggerMethod('dataSet:remove', {
@@ -455,9 +489,16 @@
                     app : this
                 });
             },
+
+            /**
+             * Returns a registered data set corresponding to the specified
+             * identifier
+             */
             getDataSet : function(id) {
                 return this._dataSets[id];
             },
+
+            /** Adds a new data set to this application */
             addDataSet : function(dataSet) {
                 var id = dataSet.getId();
                 this._dataSets[id] = dataSet;
@@ -467,6 +508,8 @@
                     });
                 }
             },
+
+            /** Removes a dataset corresponding to the specified identifier */
             removeDataSet : function(id) {
                 var dataSet = this._dataSets[id];
                 if (dataSet) {
@@ -476,7 +519,8 @@
                     });
                 }
             }
-        })
+        });
+
         /* --------------------------------------------------- */
 
         /**
@@ -734,8 +778,10 @@
             return View;
         }
 
-        /** A common superclass for all views (Map, List, etc). */
-        Mosaic.View = Mosaic.TemplateView.extend({
+        /* ------------------------------------------------- */
+
+        /** A common superclass for all dataset views (Map, List, etc). */
+        Mosaic.DataSetView = Mosaic.TemplateView.extend({
 
             /** Returns an application managing this view */
             getApp : function() {
@@ -813,8 +859,52 @@
             }
         });
 
+        /* ------------------------------------------------- */
+
+        /** It is a common superclass used to visualize resources. */
+        Mosaic.ResourceView = Mosaic.TemplateView.extend({
+            /** Returns the resource associated with this view */
+            getResource : function() {
+                return this.options.resource;
+            },
+            /** Returns the data set managing the underlying resource */
+            getDataSet : function() {
+                return this.options.dataSet;
+            },
+            /**
+             * Fires an resource event (activateResource / deactivateResource /
+             * focusResource / blurResource ...).
+             */
+            _fireResourceEvent : function(method) {
+                var dataSet = this.getDataSet();
+                var resource = this.getResource();
+                var event = dataSet.newEvent({
+                    resource : resource
+                });
+                dataSet[method](event);
+            },
+            /** Activates the underlying resource */
+            activateResource : function() {
+                this._fireResourceEvent('activateResource');
+            },
+            /** Deactivates the underlying resource */
+            deactivateResource : function() {
+                this._fireResourceEvent('deactivateResource');
+            },
+            /** Focus the underlying resource */
+            focusResource : function() {
+                this._fireResourceEvent('focusResource');
+            },
+            /** Blurs the focused resource */
+            blurResource : function() {
+                this._fireResourceEvent('blurResource');
+            }
+        });
+
+        /* ------------------------------------------------- */
+
         /** A view responsible for the map visualization. */
-        Mosaic.MapView = Mosaic.View.extend({
+        Mosaic.MapView = Mosaic.DataSetView.extend({
             type : 'MapView',
 
             /**
@@ -894,24 +984,11 @@
             }
         })
 
+        /* ------------------------------------------------- */
+
         /** List view. Used to visualize all resources in a side bar. */
-        Mosaic.ListView = Mosaic.View.extend({
-            type : 'ListView',
-            /** Returns the container element for all list items. */
-            getElement : function() {
-                return $(this.options.el);
-            },
-            /** This method is called when the application starts. */
-            onStart : function(e) {
-                var elm = this.getElement();
-                // FIXME:
-                elm.html('<div>List</div>');
-            },
-            /** This method is called when the application stops. */
-            onStop : function() {
-                var elm = this.getElement();
-                elm.html('');
-            }
+        Mosaic.ListView = Mosaic.DataSetView.extend({
+            type : 'ListView'
         })
 
         /* ------------------------------------------------- */
@@ -968,45 +1045,150 @@
 
         /** GeoJsonDataSet - MapView adapter */
         Mosaic.GeoJsonMapViewAdapter = Mosaic.ViewAdapter.extend({
+
+            /**
+             * Initializes this data set adapter. It creates an internal index
+             * of Leaflet layers used to easy retrieve layeres by resource
+             * identifiers.
+             */
             initialize : function() {
                 this._index = {};
             },
+
+            /**
+             * An internal method showing a popup with the rendered resource.
+             * Resource view depends on the mode of visualization (which is
+             * defined by the specified adapter type).
+             */
             _showPopup : function(e, AdapterType) {
-                var resource = e.resource;
+                var resource = this._dataSet.getResourceFromEvent(e);
                 var id = this._dataSet.getResourceId(resource);
+
                 var layer = this._index[id];
-                if (layer) {
-                    var ViewType = this._dataSet.getResourceAdapter(resource,
-                            AdapterType);
-                    if (ViewType) {
-                        var view = new ViewType({
-                            resource : resource,
-                            dataSet : this._dataSet,
-                            parentView : this._view
-                        });
-                        var element = view.getElement();
-                        layer.bindPopup(element[0]).openPopup();
-                        view.render();
-                        layer.bindPopup(element[0]).openPopup();
+                // Exit if there is no layers corresponding to the specified
+                // resource
+                if (!layer) {
+                    return;
+                }
+                // Loads a view type for the specified resource.
+                var ViewType = this._dataSet.getResourceAdapter(resource,
+                        AdapterType);
+                // Exit if there is no visualization defined for the current
+                // resource type
+                if (!ViewType) {
+                    return;
+                }
+
+                // Create a popup if it does not exist yet
+                if (!this._popup) {
+                    this._popup = L.popup();
+                    // Make a copy of default options
+                    this._popup._defaultOptions = _.extend({},
+                            this._popup.options);
+                }
+
+                var that = this;
+                var showPopup = null;
+                if (e.coords) {
+                    // Set the coordinates of the event for the popup.
+                    var lat = e.coords[1];
+                    var lng = e.coords[0];
+                    var latlng = L.latLng(lat, lng);
+                    this._popup.setLatLng(latlng);
+                    showPopup = function() {
+                        var map = that._view.getMap();
+                        that._popup.openOn(map);
+                    }
+                } else {
+                    // If the event does not contain coordinates - then try to
+                    // bind the popup to the layer
+                    showPopup = function() {
+                        layer.bindPopup(that._popup).openPopup();
                     }
                 }
+                if (!showPopup) {
+                    return;
+                }
+
+                // Create a new view to set in the popup
+                var view = new ViewType({
+                    resource : resource,
+                    dataSet : this._dataSet,
+                    parentView : this._view
+                });
+
+                // Get popup options from the view
+                var options;
+                if (_.isFunction(view.popupOptions)) {
+                    options = view.popupOptions();
+                } else {
+                    options = view.popupOptions || {};
+                }
+                options = _.extend({}, this._popup._defaultOptions, options);
+                this._popup.options = options;
+                view.render();
+
+                // Set the popup content
+                var element = view.getElement();
+                this._popup.setContent(element[0]);
+
+                // Open the popup
+                showPopup();
+
+                // Re-set the content (to adjust the view).
+                this._popup.setContent(element[0]);
             },
 
+            /**
+             * This internal method binds data set event listeners visualizing
+             * resources in popups.
+             */
             _bindDataEventListeners : function() {
-                this.listenTo(this._dataSet, 'activate', function(e) {
+                this.listenTo(this._dataSet, 'activateResource', function(e) {
                     this._showPopup(e, Mosaic.MapActivePopupView);
                 });
-                this.listenTo(this._dataSet, 'deactivate', function(e) {
-                    // console.log('* Deactivate: ', e)
+                this.listenTo(this._dataSet, 'deactivateResource', function(e) {
                 })
-                this.listenTo(this._dataSet, 'focus', _.debounce(function(e) {
+                this.listenTo(this._dataSet, 'focusResource', function(e) {
                     this._showPopup(e, Mosaic.MapFocusedPopupView);
-                }, 100));
-                this.listenTo(this._dataSet, 'blur', function(e) {
-                    // console.log('* Blur: ', e)
+                });
+                this.listenTo(this._dataSet, 'blurResource', function(e) {
                 })
             },
 
+            /**
+             * This internal method binds event listeners to map layers. These
+             * listeners activates / deactivate / focus or blur the
+             * corresponding resource.
+             */
+            _bindLayerEventListeners : function(resource, layer) {
+                var that = this;
+                /**
+                 * Fires an resource event (activateResource /
+                 * deactivateResource / focusResource / blurResource ...).
+                 */
+                function fireResourceEvent(method, e) {
+                    var coords = [ e.latlng.lng, e.latlng.lat ];
+                    var event = that._dataSet.newEvent({
+                        resource : resource,
+                        coords : coords
+                    });
+                    that._dataSet[method](event);
+                }
+                var resourceId = that._dataSet.getResourceId(resource);
+                that._index[resourceId] = layer;
+                layer.on('mouseover', function(e) {
+                    fireResourceEvent('focusResource', e);
+                })
+                layer.on('mouseout', function(e) {
+                    fireResourceEvent('blurResource', e);
+                })
+                layer.on('click', function(e) {
+                    fireResourceEvent('activateResource', e);
+                })
+            },
+
+            /** This method renders data on the view. */
             render : function(view, dataSet) {
                 this._view = view;
                 this._dataSet = dataSet;
@@ -1029,17 +1211,7 @@
                         return options;
                     },
                     onEachFeature : function(resource, layer) {
-                        var resourceId = that._dataSet.getResourceId(resource);
-                        that._index[resourceId] = layer;
-                        layer.on('mouseover', function() {
-                            that._dataSet.focus(resource);
-                        })
-                        layer.on('mouseout', function() {
-                            that._dataSet.blur(resource);
-                        })
-                        layer.on('click', function() {
-                            that._dataSet.activate(resource);
-                        })
+                        that._bindLayerEventListeners(resource, layer);
                     }
                 };
 
@@ -1066,6 +1238,8 @@
                 map.addLayer(this._groupLayer);
                 that._bindDataEventListeners();
             },
+
+            /** Removes data visualization from the parent view. */
             remove : function() {
                 var map = this._view.getMap();
                 map.removeLayer(this._groupLayer);

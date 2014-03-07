@@ -1,0 +1,90 @@
+<div>
+	<div id="parentView">
+		<script type="text/javascript">
+            ({
+                renderText : function(elm) {
+                    this._elm = elm;
+                    elm.text('Now :' + new Date());
+                },
+                renderTitle : function(elm) {
+                    var resource = this.getResource();
+                    elm.html(resource.properties.label);
+                },
+                sayHello : function(e) {
+                    alert('Hello, there! ' + this._elm.text())
+                }
+
+            })
+        </script>
+	</div>
+
+	<script type="text/javascript" id="commonOptions">
+        ({
+            opacity : 0.5
+        })
+    </script>
+
+	<script type="text/javascript" data-map-options="rue"
+		data-extends="#commonOptions">
+        ({
+            color : 'red'
+        })
+    </script>
+
+	<script type="text/javascript" data-map-options="Resource"
+		data-extends="#commonOptions">
+        ({
+            color : 'green'
+        })
+    </script>
+
+	<div data-resource-type="rue" data-view="MapActivePopupView"
+		data-extends="#parentView">
+		<h3 data-action-click="sayHello" data-render="renderTitle">Hello</h3>
+		<p data-render="renderText">Blah-blah</p>
+	</div>
+
+	<div data-resource-type="Resource" data-view="MapActivePopupView"
+		data-extends="[data-resource-type='rue'][data-view='MapActivePopupView']">
+		<script type="text/javascript">
+            ({
+                sayHello : function() {
+                    alert('I AM A GREEN STREET!');
+                }
+            })
+        </script>
+	</div>
+
+	<div data-resource-type="rue" data-view="MapFocusedPopupView"
+		data-extends="#parentView">
+		<strong data-action-click="sayHello" data-render="renderTitle">Abc</strong>
+		<script type="text/javascript">
+            ({
+                popupOptions : function() {
+                    console.log('I a M HERE 13');
+                    return {
+                        offset : [ 0, 0 ],
+                        minWidth : 150
+                    }
+                }
+            })
+        </script>
+	</div>
+
+	<div data-resource-type="rue" data-view="ListItemView"
+		id="rue-list-view" data-extends="#parentView">
+		<h3 data-action-click="activateResource" data-render="renderTitle">Hello</h3>
+		<p data-render="renderDescription">Blah-blah</p>
+		<script type="text/javascript">
+            ({
+                renderDescription : function(elm) {
+                    var resource = this.getResource();
+                    elm.html(resource.properties.description);
+                }
+            })
+        </script>
+	</div>
+
+	<div data-resource-type="Resource/rue" data-view="ListItemView"
+		data-extends="#rue-list-view"></div>
+</div>
