@@ -24,8 +24,10 @@
 
 	<div data-resource-type="photo" data-view="MapMarkerView">
 		<div style="white-space: nowrap;">
-			<i class="glyphicon glyphicon-globe"></i> <span
-				style="background-color: white; border: 1px solid silver; border-radius: 2em; padding: 0.1em 0.5em;" data-render="renderTitle"></span>
+			<i class="fa fa-map-marker fa-2x"></i><i class="fa fa-caret-left"
+				style="color: silver;"></i><span
+				style="background-color: white; border: 1px solid silver; border-radius: 3px; padding: 0.1em 0.5em;"
+				data-render="renderTitle"></span>
 		</div>
 		<script type="text/javascript">
             ({
@@ -34,8 +36,7 @@
                             el.text(resource.properties.label);
                         },
                         icon : {
-                            iconSize : [ undefined, undefined ],
-                            className : ''
+                            popupAnchor : [ 6, 3 ],
                         }
                     })
         </script>
@@ -67,11 +68,21 @@
         </script>
 	</div>
 
+
 	<script type="text/javascript" id="commonOptions">
         ({
             opacity : 0.5
         })
     </script>
+
+	<script type="text/javascript" data-map-options="place"
+		data-extends="#commonOptions">
+        {
+            color: 'red',
+            weight: 0.5
+        }
+    </script>
+
 
 	<script type="text/javascript" data-map-options="rue"
 		data-extends="#commonOptions">
@@ -97,10 +108,10 @@
 		data-extends="[data-resource-type='rue'][data-view='MapActivePopupView']">
 		<script type="text/javascript">
             ({
-                        sayHello : function() {
-                            alert('I AM A GREEN STREET!');
-                        }
-                    })
+                sayHello : function() {
+                    alert('I AM A GREEN STREET!');
+                }
+            })
         </script>
 	</div>
 
@@ -109,13 +120,13 @@
 		<strong data-action-click="sayHello" data-render="renderTitle">Abc</strong>
 		<script type="text/javascript">
             ({
-                        popupOptions : function() {
-                            return {
-                                offset : [ 0, 0 ],
-                                minWidth : 150
-                            }
-                        }
-                    })
+                popupOptions : function() {
+                    return {
+                        offset : [ 0, 0 ],
+                        minWidth : 150
+                    }
+                }
+            })
         </script>
 	</div>
 
@@ -125,11 +136,11 @@
 		<p data-render="renderDescription">Blah-blah</p>
 		<script type="text/javascript">
             ({
-                        renderDescription : function(elm) {
-                            var resource = this.getResource();
-                            elm.html(resource.properties.description);
-                        }
-                    })
+                renderDescription : function(elm) {
+                    var resource = this.getResource();
+                    elm.html(resource.properties.description);
+                }
+            })
         </script>
 	</div>
 

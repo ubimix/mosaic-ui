@@ -1185,7 +1185,6 @@
                 map.closePopup();
                 setTimeout(showPopup, 10);
 
-
                 // Re-set the content (to adjust the view).
                 popup.setContent(element[0]);
             },
@@ -1260,8 +1259,10 @@
                             if (Mosaic.MapMarkerView.isHtmlMarker(view)) {
                                 view.render();
                                 iconOptions.html = view.getElement().html();
-                                if (!iconOptions.className)
-                                    iconOptions.className = '';
+                                iconOptions = _.extend({
+                                    className : '',
+                                    iconSize : [ undefined, undefined ]
+                                }, iconOptions);
                                 options.icon = L.divIcon(iconOptions);
                             } else if (iconOptions.iconUrl) {
                                 options.icon = L.icon(iconOptions);
