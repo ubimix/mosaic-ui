@@ -1237,6 +1237,14 @@
                 })
             },
 
+            /**
+             * Returns <code>true</code> if the specified geometry is empty.
+             */
+            _isEmptyGeometry : function(geom) {
+                return (!geom || !geom.coordinates || !geom.coordinates.length
+                        || !geom.coordinates[0] || !geom.coordinates[1]);
+            },
+
             /** This method renders data on the view. */
             render : function(view, dataSet) {
                 this._view = view;
@@ -1289,21 +1297,23 @@
                 this._groupLayer = new L.FeatureGroup();
                 _.each(this._dataSet.getResources(), function(feature) {
                     var geom = feature.geometry;
-                    if (!geom || !geom.coordinates || !geom.coordinates.length)
+                    if (this._isEmptyGeometry(geom)) {
                         return false;
+                    }
                     var layer = L.geoJson(feature, geoJsonOptions);
                     if (layer.isPoint) {
                         this._groupLayer.addLayer(layer);
                     }
-                });
+                }, this);
 
                 var list = _.filter(that._dataSet.getResources(), function(
                         resource) {
                     var geom = resource.geometry;
-                    if (!geom || !geom.coordinates || !geom.coordinates.length)
+                    if (this._isEmptyGeometry(geom)) {
                         return false;
+                    }
                     return true;
-                })
+                }, this)
                 this._groupLayer = L.geoJson(list, geoJsonOptions).addTo(map);
 
                 map.addLayer(this._groupLayer);
