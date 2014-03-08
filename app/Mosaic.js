@@ -135,7 +135,7 @@
                     }
                     results.push(obj);
                 } catch (e) {
-                    console.log('ERROR!', e);
+                    console.log('ERROR!', e.stack);
                 }
             })
             return results;
@@ -1126,7 +1126,6 @@
              */
             _showPopup : function(e, AdapterType) {
                 var resource = this._dataSet.getResourceFromEvent(e);
-                console.log(AdapterType.prototype.type, resource)
                 var id = this._dataSet.getResourceId(resource);
 
                 var layer = this._index[id];
