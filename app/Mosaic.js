@@ -762,6 +762,9 @@
                     var html = template(options);
                     element.html(html);
                 }
+                if (that.className) {
+                    element.attr('class', that.className);
+                }
                 that.renderElement(element);
                 return that;
             },
@@ -821,9 +824,12 @@
                 this.setOptions(options);
                 this.triggerMethod('initialize');
                 var app = this.getApp();
-                this.listenTo(app, 'dataSet:add', this.onAddDataSet);
-                this.listenTo(app, 'dataSet:remove', this.onRemoveDataSet);
-                this.listenTo(app, 'start', this.onStart);
+                this.listenTo(app, 'dataSet:add', this.onDataSetAdd);
+                this.listenTo(app, 'dataSet:remove', this.onDataSetRemove);
+                this.listenTo(app, 'dataSet:update', this.onDataSetUpdate);
+                this.listenTo(app, 'start', function(ev) {
+                    this.onStart(ev);
+                });
                 this.listenTo(app, 'stop', function(ev) {
                     this.stopListening();
                     this.onStop(ev);
@@ -860,7 +866,7 @@
              * This method is called to notify about new data sets added to the
              * application.
              */
-            onAddDataSet : function(e) {
+            onDataSetAdd : function(e) {
                 var dataSet = e.dataSet;
                 var adapters = Mosaic.AdapterManager.getInstance();
                 var adapter = adapters.newAdapterInstance(this, dataSet);
@@ -874,13 +880,25 @@
              * This method is invoked when a dataset is removed from the
              * application.
              */
-            onRemoveDataSet : function(e) {
+            onDataSetRemove : function(e) {
                 var dataSet = e.dataSet;
-                var adapter = this.getEntity(dataSet.getId());
+                var adapter = this.removeEntity(dataSet.getId());
                 if (adapter && adapter.remove) {
                     adapter.remove();
                 }
+            },
+
+            /**
+             * This method is invoked when a dataset is changed.
+             */
+            onDataSetUpdate : function(e) {
+                var dataSet = e.dataSet;
+                var adapter = this.getEntity(dataSet.getId());
+                if (adapter && adapter.render) {
+                    adapter.render(this, dataSet);
+                }
             }
+
         });
 
         /* ------------------------------------------------- */
