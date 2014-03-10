@@ -5,86 +5,6 @@
         var Mosaic = {};
 
         /* --------------------------------------------------- */
-        /* Mix-in methods */
-
-        /**
-         * A basic mix-in method used to defined the type of the parent class.
-         */
-        Mosaic.getType = function() {
-            var type = this.type = this.type || _.uniqueId('type-');
-            return type;
-        }
-        /**
-         * This mix-in method returns a unique identifier for instances of the
-         * parent class.
-         */
-        Mosaic.getId = function() {
-            var options = this.options = this.options || {};
-            var id = options.id = options.id || _.uniqueId('id-');
-            return id;
-        }
-
-        /**
-         * Trigger an event and/or a corresponding method name. Examples:
-         * 
-         * <ul>
-         * <li> `this.triggerMethod(&quot;foo&quot;)` will trigger the
-         * &quot;foo&quot; event and call the &quot;onFoo&quot; method.</li>
-         * <li> `this.triggerMethod(&quot;foo:bar&quot;) will trigger the
-         * &quot;foo:bar&quot; event and call the &quot;onFooBar&quot; method.</li>
-         * </ul>
-         * 
-         * This method was copied from Marionette.triggerMethod.
-         */
-        Mosaic.triggerMethod = (function() {
-            // split the event name on the :
-            var splitter = /(^|:)(\w)/gi;
-            // take the event section ("section1:section2:section3")
-            // and turn it in to uppercase name
-            function getEventName(match, prefix, eventName) {
-                return eventName.toUpperCase();
-            }
-            // actual triggerMethod name
-            var triggerMethod = function(event) {
-                // get the method name from the event name
-                var methodName = 'on' + event.replace(splitter, getEventName);
-                var method = this[methodName];
-                // trigger the event, if a trigger method exists
-                if (_.isFunction(this.fire)) {
-                    this.fire.apply(this, arguments);
-                }
-                // call the onMethodName if it exists
-                if (_.isFunction(method)) {
-                    // pass all arguments, except the event name
-                    return method.apply(this, _.tail(arguments));
-                }
-            };
-            return triggerMethod;
-        })();
-
-        /** Listens to events produced by external objects */
-        Mosaic.listenTo = function(obj, event, handler, context) {
-            var listeners = this._listeners = this._listeners || [];
-            context = context || this;
-            obj.on(event, handler, context);
-            listeners.push({
-                obj : obj,
-                event : event,
-                handler : handler,
-                context : context
-            });
-        };
-
-        /** Removes all event listeners produced by external objects. */
-        Mosaic.stopListening = function() {
-            _.each(this._listeners, function(listener) {
-                var context = listener.context || this;
-                listener.obj.off(listener.event, listener.handler, context);
-            }, this);
-            delete this._listeners;
-        };
-
-        /* --------------------------------------------------- */
         /* Static utility methods */
 
         Mosaic.Utils = {
@@ -143,17 +63,184 @@
 
         /* --------------------------------------------------- */
 
+        /** Common mixins */
+        Mosaic.Mixins = {
+
+            /**
+             * A basic mix-in method used to defined the type of the parent
+             * class.
+             */
+            getType : function() {
+                var type = this.type = this.type || _.uniqueId('type-');
+                return type;
+            },
+
+            /**
+             * This mix-in method returns a unique identifier for instances of
+             * the parent class.
+             */
+            getId : function() {
+                var options = this.options = this.options || {};
+                var id = options.id = options.id || _.uniqueId('id-');
+                return id;
+            },
+
+            /** Events mixins */
+            Events : {
+                /** Registers listeners for the specified event key. */
+                on : function(eventKey, handler, context) {
+                    var listeners = this.__listeners = this.__listeners || {};
+                    context = context || this;
+                    var list = listeners[eventKey] = listeners[eventKey] || [];
+                    list.push({
+                        handler : handler,
+                        context : context
+                    });
+                },
+                /** Removes a listener for events with the specified event key */
+                off : function(eventKey, handler, context) {
+                    var listeners = this.__listeners;
+                    if (!listeners)
+                        return;
+                    var list = listeners[eventKey];
+                    if (!list)
+                        return;
+                    list = _.filter(list, function(slot) {
+                        var match = (slot.handler === handler);
+                        match &= (!context || slot.context === context);
+                        return !match;
+                    })
+                    listeners[eventKey] = list.length ? list : undefined;
+                },
+                /** Fires an event with the specified key. */
+                fire : function(eventKey) {
+                    var listeners = this.__listeners;
+                    if (!listeners)
+                        return;
+                    var list = listeners[eventKey];
+                    if (!list)
+                        return;
+                    var args = _.toArray(arguments);
+                    args.splice(0, 1);
+                    _.each(list, function(slot) {
+                        slot.handler.apply(slot.context, args);
+                    })
+                }
+            },
+
+            /** Listens to events produced by external objects */
+            listenTo : function(obj, event, handler, context) {
+                var listeners = this._listeners = this._listeners || [];
+                context = context || this;
+                obj.on(event, handler, context);
+                listeners.push({
+                    obj : obj,
+                    event : event,
+                    handler : handler,
+                    context : context
+                });
+            },
+
+            /** Removes all event listeners produced by external objects. */
+            stopListening : function() {
+                _.each(this._listeners,
+                        function(listener) {
+                            var context = listener.context || this;
+                            listener.obj.off(listener.event, listener.handler,
+                                    context);
+                        }, this);
+                delete this._listeners;
+            },
+
+            /**
+             * Trigger an event and/or a corresponding method name. Examples:
+             * 
+             * <ul>
+             * <li> `this.triggerMethod(&quot;foo&quot;)` will trigger the
+             * &quot;foo&quot; event and call the &quot;onFoo&quot; method.</li>
+             * <li> `this.triggerMethod(&quot;foo:bar&quot;) will trigger the
+             * &quot;foo:bar&quot; event and call the &quot;onFooBar&quot;
+             * method.</li>
+             * </ul>
+             * 
+             * This method was copied from Marionette.triggerMethod.
+             */
+            triggerMethod : (function() {
+                // split the event name on the :
+                var splitter = /(^|:)(\w)/gi;
+                // take the event section ("section1:section2:section3")
+                // and turn it in to uppercase name
+                function getEventName(match, prefix, eventName) {
+                    return eventName.toUpperCase();
+                }
+                // actual triggerMethod name
+                var triggerMethod = function(event) {
+                    // get the method name from the event name
+                    var methodName = 'on'
+                            + event.replace(splitter, getEventName);
+                    var method = this[methodName];
+                    // trigger the event, if a trigger method exists
+                    if (_.isFunction(this.fire)) {
+                        this.fire.apply(this, arguments);
+                    }
+                    // call the onMethodName if it exists
+                    if (_.isFunction(method)) {
+                        // pass all arguments, except the event name
+                        return method.apply(this, _.tail(arguments));
+                    }
+                };
+                return triggerMethod;
+            })(),
+
+        };
+
+        /* --------------------------------------------------- */
+
         /** Common superclass for all other types. */
-        Mosaic.Class = L.Class.extend({
-            /** Events triggering/listening */
-            includes : L.Mixin.Events,
+        Mosaic.Class = (function() {
+            function copy(to, from) {
+                for ( var name in from) {
+                    if (_.has(from, name) && name !== 'prototype') {
+                        to[name] = from[name];
+                    }
+                }
+            }
+            function extend() {
+                return newClass.apply(this, arguments);
+            }
+            function newClass() {
+                function Type() {
+                    if (this.initialize) {
+                        this.initialize.apply(this, arguments);
+                    }
+                }
+                Type.extend = extend;
+                if (this) {
+                    copy(Type, this);
+                    copy(Type.prototype, this.prototype);
+                }
+                _.each(arguments, function(fields) {
+                    copy(Type.prototype, fields);
+                })
+                return Type;
+            }
+            return newClass();
+        })();
+
+        /** Events triggering/listening */
+        _.extend(Mosaic.Class.prototype, Mosaic.Mixins.Events);
+
+        /** Default methods and fields. */
+        _.extend(Mosaic.Class.prototype, {
+
             /** Trigger events and calls onXxx methods on this object. */
-            triggerMethod : Mosaic.triggerMethod,
+            triggerMethod : Mosaic.Mixins.triggerMethod,
+
             /** Sets options for this object. */
             setOptions : function(options) {
-                L.setOptions(this, options);
+                this.options = _.extend(this.options || {}, options);
             }
-        });
+        })
 
         /* --------------------------------------------------- */
 
@@ -268,13 +355,13 @@
         Mosaic.DataSet = Mosaic.Class.extend({
 
             /** Returns a unique identifier of this dataset */
-            getId : Mosaic.getId,
+            getId : Mosaic.Mixins.getId,
 
             /**
              * Returns the logical type of this dataset. This value should be
              * defined as a "type" field in subclasses.
              */
-            getType : Mosaic.getType,
+            getType : Mosaic.Mixins.getType,
 
             /**
              * Initializes internal fields for objects of this type.
@@ -487,14 +574,14 @@
              * event.
              */
             start : function() {
+                if (this._started)
+                    return;
                 this._started = true;
                 this.triggerMethod('start', {
                     app : this
                 });
                 _.each(this._dataSets, function(dataSet) {
-                    this.triggerMethod('dataSet:add', {
-                        dataSet : dataSet
-                    });
+                    this._triggerDataSetEvent('dataSet:add', dataSet);
                 }, this);
             },
 
@@ -503,10 +590,10 @@
              * "stop" event.
              */
             stop : function() {
+                if (!this._started)
+                    return;
                 _.each(this._dataSets, function(dataSet) {
-                    this.triggerMethod('dataSet:remove', {
-                        dataSet : dataSet
-                    });
+                    this._triggerDataSetEvent('dataSet:remove', dataSet);
                 }, this);
                 this._started = false;
                 this.triggerMethod('stop', {
@@ -527,21 +614,28 @@
                 var id = dataSet.getId();
                 this._dataSets[id] = dataSet;
                 if (this._started) {
-                    this.triggerMethod('dataSet:add', {
-                        dataSet : dataSet
-                    });
+                    this._triggerDataSetEvent('dataSet:add', dataSet);
                 }
             },
 
-            /** Removes a dataset corresponding to the specified identifier */
-            removeDataSet : function(id) {
-                var dataSet = this._dataSets[id];
-                if (dataSet) {
-                    delete this._dataSets[id];
-                    this.triggerMethod('dataSet:remove', {
-                        dataSet : dataSet
-                    });
-                }
+            /** Removes the specified dataset. */
+            removeDataSet : function(dataSet) {
+                this._triggerDataSetEvent('dataSet:remove', dataSet);
+                var id = dataSet.getId();
+                delete this._dataSets[id];
+            },
+
+            /**
+             * Notifies all application and dataset listeners about the
+             * specified dataset event.
+             */
+            _triggerDataSetEvent : function(eventKey, dataSet) {
+                var event = {
+                    dataSet : dataSet,
+                    app : this
+                };
+                this.triggerMethod(eventKey, event);
+                dataSet.triggerMethod(eventKey, event);
             }
         });
 
@@ -553,20 +647,20 @@
         Mosaic.TemplateView = Mosaic.Class.extend({
 
             /** Returns a unique identifier of this view. */
-            getId : Mosaic.getId,
+            getId : Mosaic.Mixins.getId,
 
             /**
              * Returns a logical type of this view. This identifier is used to
              * retrieve data adapters repsonsible for data rendering on this
              * view.
              */
-            getType : Mosaic.getType,
+            getType : Mosaic.Mixins.getType,
 
             /** Listens to events produced by external objects */
-            listenTo : Mosaic.listenTo,
+            listenTo : Mosaic.Mixins.listenTo,
 
             /** Removes all event listeners produced by external objects. */
-            stopListening : Mosaic.stopListening,
+            stopListening : Mosaic.Mixins.stopListening,
 
             /** Initializes this object. */
             initialize : function(options) {
@@ -1059,8 +1153,8 @@
          * adapters.
          */
         Mosaic.ViewAdapter = Mosaic.Class.extend({
-            stopListening : Mosaic.stopListening,
-            listenTo : Mosaic.listenTo
+            stopListening : Mosaic.Mixins.stopListening,
+            listenTo : Mosaic.Mixins.listenTo
         });
 
         /* ------------------------------------------------- */
@@ -1211,6 +1305,7 @@
              * resources in popups.
              */
             _bindDataEventListeners : function() {
+
                 this.listenTo(this._dataSet, 'activateResource', function(e) {
                     this._showPopup(e, Mosaic.MapActivePopupView);
                 });
@@ -1243,7 +1338,6 @@
                     that._dataSet[method](event);
                 }
                 var resourceId = that._dataSet.getResourceId(resource);
-                that._index[resourceId] = layer;
                 layer.on('mouseover', function(e) {
                     fireResourceEvent('focusResource', e);
                 })
@@ -1270,6 +1364,7 @@
                 var map = view.getMap();
                 var that = this;
 
+                // TODO: use a MapFitureView adapter for all geometries
                 var geoJsonOptions = {
                     pointToLayer : function(resource, latlng) {
                         var options = _.extend({}, resource.geometry.options);
@@ -1294,6 +1389,7 @@
                             }
                         }
                         var layer = new L.Marker(latlng, options);
+                        layer._view = view;
                         layer._ismarker = true;
                         return layer;
                     },
@@ -1312,37 +1408,44 @@
                     }
                 };
 
+                var pointsLayer = null;
+                var cluster = Mosaic.Utils.getOption(this._dataSet,
+                        'clusterPoints');
+                if (cluster) {
+                    pointsLayer = new L.FeatureGroup();
+                }
                 this._groupLayer = new L.FeatureGroup();
-                _.each(this._dataSet.getResources(), function(feature) {
-                    var geom = feature.geometry;
-                    if (this._isEmptyGeometry(geom)) {
-                        return false;
-                    }
-                    var layer = L.geoJson(feature, geoJsonOptions);
-                    if (layer.isPoint) {
-                        this._groupLayer.addLayer(layer);
-                    }
-                }, this);
-
-                var list = _.filter(that._dataSet.getResources(), function(
-                        resource) {
+                _.each(this._dataSet.getResources(), function(resource) {
                     var geom = resource.geometry;
                     if (this._isEmptyGeometry(geom)) {
                         return false;
                     }
-                    return true;
-                }, this)
-                this._groupLayer = L.geoJson(list, geoJsonOptions).addTo(map);
-
+                    var layer = L.geoJson(resource, geoJsonOptions);
+                    var resourceId = this._dataSet.getResourceId(resource);
+                    this._index[resourceId] = layer;
+                    if (pointsLayer && layer._ismarker) {
+                        pointsLayer.addLayer(layer);
+                    } else {
+                        this._groupLayer.addLayer(layer);
+                    }
+                }, this);
+                if (pointsLayer) {
+                    this._groupLayer.addLayer(pointsLayer);
+                }
                 map.addLayer(this._groupLayer);
                 that._bindDataEventListeners();
             },
 
             /** Removes data visualization from the parent view. */
             remove : function() {
-                var map = this._view.getMap();
-                map.removeLayer(this._groupLayer);
+                console.log('Removing map layers...', this._groupLayer)
+                if (this._groupLayer) {
+                    var map = this._view.getMap();
+                    map.removeLayer(this._groupLayer);
+                    delete this._groupLayer;
+                }
                 this.stopListening();
+                this._index = {};
             }
         });
 
