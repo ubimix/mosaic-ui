@@ -1186,7 +1186,7 @@
          * a visual HTML representation for a map marker or it is used just as a
          * source of marker options.
          */
-        Mosaic.MapMarkerView.isHtmlMarker = function(view) {
+        Mosaic.MapMarkerView.hasHtmlMarker = function(view) {
             return view.template ? true : false;
         }
 
@@ -1357,6 +1357,35 @@
                         || !geom.coordinates[0] || !geom.coordinates[1]);
             },
 
+            /**
+             * Returns an options object defining visualization of figures on
+             * the map.
+             */
+            _getFigureOptions : function(resource) {
+                /* Creates a view for this resource */
+                var options = _.extend({}, resource.geometry.options);
+                var view = this.newResourceView(Mosaic.MapMarkerView, resource,
+                        this._view);
+                if (view) {
+                    view.render();
+                    options = _.extend(options, Mosaic.Utils
+                            .getOptions(view.options));
+                    var iconOptions = Mosaic.Utils.getOptions(view.icon)
+                    if (Mosaic.MapMarkerView.hasHtmlMarker(view)) {
+                        iconOptions.html = view.getElement().html();
+                        iconOptions = _.extend({
+                            className : '',
+                            iconSize : [ undefined, undefined ]
+                        }, iconOptions);
+                        options.icon = L.divIcon(iconOptions);
+                    } else if (iconOptions.iconUrl) {
+                        options.icon = L.icon(iconOptions);
+                    }
+                }
+                options.view = view;
+                return options;
+            },
+
             /** This method renders data on the view. */
             render : function(view, dataSet) {
                 this._view = view;
@@ -1364,55 +1393,18 @@
                 var map = view.getMap();
                 var that = this;
 
-                // TODO: use a MapFitureView adapter for all geometries
-                var geoJsonOptions = {
-                    pointToLayer : function(resource, latlng) {
-                        var options = _.extend({}, resource.geometry.options);
-                        /* Creates a view for this resource */
-                        var view = that.newResourceView(Mosaic.MapMarkerView,
-                                resource, that._view);
-                        if (view) {
-                            options = _.extend(options, Mosaic.Utils
-                                    .getOptions(view.options));
-                            var iconOptions = Mosaic.Utils
-                                    .getOptions(view.icon)
-                            if (Mosaic.MapMarkerView.isHtmlMarker(view)) {
-                                view.render();
-                                iconOptions.html = view.getElement().html();
-                                iconOptions = _.extend({
-                                    className : '',
-                                    iconSize : [ undefined, undefined ]
-                                }, iconOptions);
-                                options.icon = L.divIcon(iconOptions);
-                            } else if (iconOptions.iconUrl) {
-                                options.icon = L.icon(iconOptions);
-                            }
-                        }
-                        var layer = new L.Marker(latlng, options);
-                        layer._view = view;
-                        layer._ismarker = true;
-                        return layer;
-                    },
-                    style : function(resource) {
-                        var options = that._dataSet.getResourceAdapter(
-                                resource, Mosaic.MapFigureOptions)
-                                || {};
-                        if (_.isFunction(options)) {
-                            options = options.call(options, that._dataSet,
-                                    resource);
-                        }
-                        return options;
-                    },
-                    onEachFeature : function(resource, layer) {
-                        that._bindLayerEventListeners(resource, layer);
-                    }
-                };
-
                 var pointsLayer = null;
                 var cluster = Mosaic.Utils.getOption(this._dataSet,
                         'clusterPoints');
                 if (cluster) {
-                    pointsLayer = new L.FeatureGroup();
+                    pointsLayer = new L.MarkerClusterGroup({
+                    // iconCreateFunction : function(cluster) {
+                    // return new L.DivIcon({
+                    // html : '<b>' + cluster.getChildCount() + '</b>'
+                    // });
+                    // }
+                    });
+                    // pointsLayer = new L.FeatureGroup();
                 }
                 this._groupLayer = new L.FeatureGroup();
                 _.each(this._dataSet.getResources(), function(resource) {
@@ -1420,13 +1412,22 @@
                     if (this._isEmptyGeometry(geom)) {
                         return false;
                     }
-                    var layer = L.geoJson(resource, geoJsonOptions);
+                    var options = this._getFigureOptions(resource);
+                    var layer = L.GeoJSON.geometryToLayer(resource, function(
+                            resource, latlng) {
+                        var layer = new L.Marker(latlng, options);
+                        layer._ismarker = true;
+                        return layer;
+                    }, L.GeoJSON.coordsToLatLng, options);
+                    
+                    this._bindLayerEventListeners(resource, layer);
+
                     var resourceId = this._dataSet.getResourceId(resource);
                     this._index[resourceId] = layer;
                     if (pointsLayer && layer._ismarker) {
                         pointsLayer.addLayer(layer);
                     } else {
-                        this._groupLayer.addLayer(layer);
+//                        this._groupLayer.addLayer(layer);
                     }
                 }, this);
                 if (pointsLayer) {
@@ -1438,7 +1439,6 @@
 
             /** Removes data visualization from the parent view. */
             remove : function() {
-                console.log('Removing map layers...', this._groupLayer)
                 if (this._groupLayer) {
                     var map = this._view.getMap();
                     map.removeLayer(this._groupLayer);
