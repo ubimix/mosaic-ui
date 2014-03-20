@@ -1105,8 +1105,35 @@
              * method really creates maps.
              */
             onStart : function(e) {
-                var map = this._newMap();
+                this._newMap();
+                this.resetView();
+            },
+            /**
+             * This method is called when the application stops. It removes the
+             * underlying map from the DOM.
+             */
+            onStop : function() {
+                this._map.remove();
+                delete this._map;
+            },
+            /**
+             * Creates and returns a new Leaflet map object.
+             */
+            _newMap : function() {
                 var that = this;
+                var mapOptions = _.extend({}, this.options.mapOptions);
+                var controls = [];
+                _.each(mapOptions, function(value, key) {
+                    if (key.match(/Control$/) && _.isObject(value)) {
+                        controls.push(value);
+                        mapOptions[key] = false;
+                    }
+                })
+                var element = this.getElement();
+                var map = this._map = L.map(element[0], mapOptions);
+                _.each(controls, function(control) {
+                    map.addControl(control);
+                })
                 function _updateZoomClassNames() {
                     var zoom = map.getZoom();
                     var maxZoom = that.getMaxZoom();
@@ -1122,27 +1149,6 @@
                 map.on('zoomend', function() {
                     _updateZoomClassNames();
                 });
-                this.resetView();
-            },
-            /**
-             * This method is called when the application stops. It removes the
-             * underlying map from the DOM.
-             */
-            onStop : function() {
-                this._map.remove();
-                delete this._map;
-            },
-            /**
-             * Creates and returns a new Leaflet map object.
-             */
-            _newMap : function() {
-                var mapOptions = _.extend({}, {
-                    trackResize : true,
-                    loadingControl : true,
-                    attributionControl : false
-                }, this.options.mapOptions);
-                var element = this.getElement();
-                return this._map = L.map(element[0], mapOptions);
             }
         })
 
@@ -1425,7 +1431,6 @@
                         layer._ismarker = true;
                         return layer;
                     }, L.GeoJSON.coordsToLatLng, options);
-
                     this._bindLayerEventListeners(resource, layer);
 
                     var resourceId = this._dataSet.getResourceId(resource);
@@ -1433,7 +1438,7 @@
                     if (pointsLayer && layer._ismarker) {
                         pointsLayer.addLayer(layer);
                     } else {
-                        // this._groupLayer.addLayer(layer);
+                        this._groupLayer.addLayer(layer);
                     }
                 }, this);
                 if (pointsLayer) {

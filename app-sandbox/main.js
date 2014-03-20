@@ -31,6 +31,11 @@
         var app = new Mosaic.App();
         var map = new Mosaic.MapView({
             app : app,
+            mapOptions : {
+                zoomControl : L.control.zoom({
+                    position : 'topright'
+                })
+            },
             el : $('#map'),
             maxZoom : 22,
             initialZoom : 16,
@@ -55,8 +60,8 @@
         $(window).resize(updateSize);
         $(updateSize);
 
-        var tilesUrl = "http://{s}.tile.stamen.com/toner/{z}/{x}/{y}.png";
         var tilesUrl = 'http://127.0.0.1:8888/tiles/app-econovista/osm-bright/{z}/{x}/{y}.png';
+        var tilesUrl = "http://{s}.tile.stamen.com/toner/{z}/{x}/{y}.png";
         app.addDataSet(new Mosaic.TilesDataSet({
             tilesUrl : tilesUrl,
         }));
