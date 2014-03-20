@@ -1105,13 +1105,7 @@
              * method really creates maps.
              */
             onStart : function(e) {
-                var mapOptions = {
-                    trackResize : true,
-                    loadingControl : true,
-                    attributionControl : false
-                };
-                var element = this.getElement();
-                var map = this._map = L.map(element[0], mapOptions);
+                var map = this._newMap();
                 var that = this;
                 function _updateZoomClassNames() {
                     var zoom = map.getZoom();
@@ -1137,6 +1131,18 @@
             onStop : function() {
                 this._map.remove();
                 delete this._map;
+            },
+            /**
+             * Creates and returns a new Leaflet map object.
+             */
+            _newMap : function() {
+                var mapOptions = _.extend({}, {
+                    trackResize : true,
+                    loadingControl : true,
+                    attributionControl : false
+                }, this.options.mapOptions);
+                var element = this.getElement();
+                return this._map = L.map(element[0], mapOptions);
             }
         })
 
@@ -1419,7 +1425,7 @@
                         layer._ismarker = true;
                         return layer;
                     }, L.GeoJSON.coordsToLatLng, options);
-                    
+
                     this._bindLayerEventListeners(resource, layer);
 
                     var resourceId = this._dataSet.getResourceId(resource);
@@ -1427,7 +1433,7 @@
                     if (pointsLayer && layer._ismarker) {
                         pointsLayer.addLayer(layer);
                     } else {
-//                        this._groupLayer.addLayer(layer);
+                        // this._groupLayer.addLayer(layer);
                     }
                 }, this);
                 if (pointsLayer) {
