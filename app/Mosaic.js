@@ -1406,8 +1406,11 @@
                 var that = this;
 
                 var pointsLayer = null;
+                // FIXME: normalize access to option values
                 var cluster = Mosaic.Utils.getOption(this._dataSet,
-                        'clusterPoints');
+                        'clusterPoints')
+                        || Mosaic.Utils.getOption(this._dataSet.options,
+                                'clusterPoints');
                 if (cluster) {
                     pointsLayer = new L.MarkerClusterGroup({
                     // iconCreateFunction : function(cluster) {

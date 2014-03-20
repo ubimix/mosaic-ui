@@ -70,7 +70,8 @@
             var dataUrl = './data/data.json';
             return loadJson(dataUrl).then(function(data) {
                 var dataSet = new Mosaic.GeoJsonDataSet({
-                    data : data.features
+                    data : data.features,
+                    clusterPoints : true
                 });
                 app.addDataSet(dataSet);
             })
