@@ -5,7 +5,7 @@
         "bootstrap" : "*",
         "font-awesome" : "*",
         "jquery" : "*",
-        "q" : "*",
+        "q" : "1.0.0",
         "underscore" : "*",
         "requirejs" : "*",
         "requirejs-text" : "*"
