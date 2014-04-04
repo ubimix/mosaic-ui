@@ -1,5 +1,13 @@
-(function(define) {
-    define([ 'underscore', 'jquery', 'L' ], function module(_, $, L) {
+(function(context) {
+    "use strict";
+
+    if (context.define) {
+        context.define([ 'underscore', 'jquery', 'L' ], module);
+    } else {
+        context.Mosaic = module(context._, context.jQuery, context.L);
+    }
+
+    function module(_, $, L) {
 
         /** Common namespace */
         var Mosaic = {};
@@ -1625,5 +1633,5 @@
                 Mosaic.GeoJsonListViewAdapter);
 
         return Mosaic;
-    });
-})(typeof define === 'function' ? define : require('amdefine')(module));
+    }
+})(this);
