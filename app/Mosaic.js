@@ -1029,6 +1029,7 @@
             },
             /** Activates the underlying resource */
             activateResource : function() {
+                console.log('ACTIVATE!')
                 this._fireResourceEvent('activateResource');
             },
             /** Deactivates the underlying resource */
@@ -1473,7 +1474,7 @@
 
         /* ------------------------------------------------- */
         /** Resource visualization in the list. */
-        Mosaic.ListItemView = Mosaic.TemplateView.extend({
+        Mosaic.ListItemView = Mosaic.ResourceView.extend({
             type : 'ListItemView'
         });
 
