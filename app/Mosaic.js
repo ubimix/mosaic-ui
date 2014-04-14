@@ -740,7 +740,7 @@
                 var that = this;
                 var selector = '[' + attrName + ']';
                 elm.on(event, selector, function(ev) {
-                    var e = $(ev.target);
+                    var e = $(ev.currentTarget);
                     var actionName = e.attr(attrName);
                     var action = that[actionName];
                     if (_.isFunction(action)) {
@@ -833,16 +833,12 @@
              * "focus", "blur", "keypress", "keydown", "keyup"...).
              */
             _bindEventListeners : function() {
-                var that = this;
+                var actions = [ 'click', 'mouseover', 'mouseout', 'focus',
+                        'blur', 'keypress', 'keydown', 'keyup' ];
                 var element = this.getElement();
-                that.bindListeners(element, 'click');
-                that.bindListeners(element, 'mouseover');
-                that.bindListeners(element, 'mouseout');
-                that.bindListeners(element, 'focus');
-                that.bindListeners(element, 'blur');
-                that.bindListeners(element, 'keypress');
-                that.bindListeners(element, 'keydown');
-                that.bindListeners(element, 'keyup');
+                _.each(actions, function(action) {
+                    this.bindListeners(element, action);
+                }, this);
             },
 
             /**
@@ -1029,7 +1025,6 @@
             },
             /** Activates the underlying resource */
             activateResource : function() {
-                console.log('ACTIVATE!')
                 this._fireResourceEvent('activateResource');
             },
             /** Deactivates the underlying resource */
@@ -1474,7 +1469,7 @@
 
         /* ------------------------------------------------- */
         /** Resource visualization in the list. */
-        Mosaic.ListItemView = Mosaic.ResourceView.extend({
+        Mosaic.ListItemView = Mosaic.TemplateView.extend({
             type : 'ListItemView'
         });
 
