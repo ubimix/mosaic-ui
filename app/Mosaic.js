@@ -475,7 +475,7 @@
                         resource : this._active
                     }));
                 }
-                this.focusResource(event);
+                // this.focusResource(event);
                 this._active = resource;
                 this.triggerMethod('activateResource', event);
             },
@@ -1252,21 +1252,32 @@
              * Resource view depends on the mode of visualization (which is
              * defined by the specified adapter type).
              */
-            _showPopup : function(e, AdapterType) {
-                var resource = this._dataSet.getResourceFromEvent(e);
-                var id = this._dataSet.getResourceId(resource);
-
-                var layer = this._index[id];
-                // Exit if there is no layers corresponding to the specified
+            _showPopup : function(e, AdapterType, viewPriority) {
+                var that = this;
+                var resource = that._dataSet.getResourceFromEvent(e);
+                var resourceId = that._dataSet.getResourceId(resource);
+                if (!resource || !resourceId)
+                    return;
+                if (resourceId == that._popupResourceId) {
+                    if (viewPriority < that._popupViewPriority)
+                        return;
+                    if (viewPriority == that._popupViewPriority
+                            && AdapterType == that._popupViewType)
+                        return;
+                }
+                var layer = that._index[resourceId];
+                // Exit if there is no layers corresponding to the
+                // specified
                 // resource
                 if (!layer) {
                     return;
                 }
 
                 /* Creates a view for this resource */
-                var view = this.newResourceView(AdapterType, resource,
-                        this._view);
-                // Exit if there is no visualization defined for the current
+                var view = that.newResourceView(AdapterType, resource,
+                        that._view);
+                // Exit if there is no visualization defined for the
+                // current
                 // resource type
                 if (!view) {
                     return;
@@ -1274,11 +1285,19 @@
 
                 // Get popup options from the view
                 var options = Mosaic.Utils.getOptions(view.popupOptions);
-
-                // Create a popup if it does not exist yet
+                // Create a new popup
                 var popup = L.popup(options);
+                that._popupResourceId = resourceId;
+                that._popupViewType = AdapterType;
+                that._popupViewPriority = viewPriority;
+                popup.on('close', function() {
+                    if (resourceId != that._popupResourceId)
+                        return;
+                    delete that._popupResourceId;
+                    delete that._popupViewType;
+                    delete that._popupViewPriority;
+                });
 
-                var that = this;
                 var showPopup = null;
                 if (!layer._ismarker && e.coords) {
                     // Set the coordinates of the event for the popup.
@@ -1291,7 +1310,8 @@
                         popup.openOn(map);
                     }
                 } else {
-                    // If the event does not contain coordinates - then try to
+                    // If the event does not contain coordinates - then
+                    // try to
                     // bind the popup to the layer
                     showPopup = function() {
                         layer.bindPopup(popup).openPopup();
@@ -1309,11 +1329,7 @@
 
                 // Open the popup
                 var map = that._view.getMap();
-                map.closePopup();
                 setTimeout(showPopup, 10);
-
-                // Re-set the content (to adjust the view).
-                popup.setContent(element[0]);
             },
 
             /**
@@ -1321,14 +1337,36 @@
              * resources in popups.
              */
             _bindDataEventListeners : function() {
-
                 this.listenTo(this._dataSet, 'activateResource', function(e) {
-                    this._showPopup(e, Mosaic.MapActivePopupView);
+                    console.log('event:activateResource')
+
+                    var that = this;
+                    var resource = that._dataSet.getResourceFromEvent(e);
+                    var id = that._dataSet.getResourceId(resource);
+                    var layer = that._index[id];
+                    if (!layer) {
+                        return;
+                    }
+                    var doShow = function() {
+                        var viewPriority = 2;
+                        that._showPopup(e, Mosaic.MapActivePopupView,
+                                viewPriority);
+                    };
+                    if (that._groupLayer.clusterLayer) {
+                        that._groupLayer.clusterLayer.zoomToShowLayer(layer,
+                                doShow);
+                    } else {
+                        doShow();
+                    }
                 });
                 this.listenTo(this._dataSet, 'deactivateResource', function(e) {
                 })
                 this.listenTo(this._dataSet, 'focusResource', function(e) {
-                    this._showPopup(e, Mosaic.MapFocusedPopupView);
+                    console.log('event:focusResource')
+                    var viewPriority = 1;
+                    this
+                            ._showPopup(e, Mosaic.MapFocusedPopupView,
+                                    viewPriority);
                 });
                 this.listenTo(this._dataSet, 'blurResource', function(e) {
                 })
@@ -1402,6 +1440,22 @@
                 return options;
             },
 
+            /**
+             * Returns options value corresponding to the specified key of the
+             * internal dataset
+             */
+            _getDatasetOptions : function(optionsKey, defaultValue) {
+                var value = Mosaic.Utils.getOption(this._dataSet, optionsKey);
+                if (value === undefined) {
+                    value = Mosaic.Utils.getOption(this._dataSet.options,
+                            optionsKey);
+                }
+                if (value === undefined) {
+                    value = defaultValue;
+                }
+                return value;
+            },
+
             /** This method renders data on the view. */
             render : function(view, dataSet) {
                 this._view = view;
@@ -1409,21 +1463,17 @@
                 var map = view.getMap();
                 var that = this;
 
-                var pointsLayer = null;
-                // FIXME: normalize access to option values
-                var cluster = Mosaic.Utils.getOption(this._dataSet,
-                        'clusterPoints')
-                        || Mosaic.Utils.getOption(this._dataSet.options,
-                                'clusterPoints');
-                if (cluster) {
-                    pointsLayer = new L.MarkerClusterGroup({
-                    // iconCreateFunction : function(cluster) {
-                    // return new L.DivIcon({
-                    // html : '<b>' + cluster.getChildCount() + '</b>'
-                    // });
-                    // }
-                    });
-                    // pointsLayer = new L.FeatureGroup();
+                var clusterLayer = null;
+                var makeCluster = that._getDatasetOptions('clusterPoints',
+                        false);
+                if (makeCluster) {
+                    var clusterOptions = that._getDatasetOptions(
+                            'clusterOptions', {});
+                    clusterOptions = _.extend({
+                        spiderfyOnMaxZoom : true,
+                        removeOutsideVisibleBounds : true
+                    }, clusterOptions)
+                    clusterLayer = new L.MarkerClusterGroup(clusterOptions);
                 }
                 this._groupLayer = new L.FeatureGroup();
                 _.each(this._dataSet.getResources(), function(resource) {
@@ -1442,14 +1492,15 @@
 
                     var resourceId = this._dataSet.getResourceId(resource);
                     this._index[resourceId] = layer;
-                    if (pointsLayer && layer._ismarker) {
-                        pointsLayer.addLayer(layer);
+                    if (clusterLayer && layer._ismarker) {
+                        clusterLayer.addLayer(layer);
                     } else {
                         this._groupLayer.addLayer(layer);
                     }
                 }, this);
-                if (pointsLayer) {
-                    this._groupLayer.addLayer(pointsLayer);
+                if (clusterLayer) {
+                    this._groupLayer.addLayer(clusterLayer);
+                    this._groupLayer.clusterLayer = clusterLayer;
                 }
                 map.addLayer(this._groupLayer);
                 that._bindDataEventListeners();
