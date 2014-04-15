@@ -377,6 +377,17 @@
             initialize : function(options) {
                 this.setOptions(options);
                 this._dataSets = {};
+                // Activates/deactivates the resources and fires the
+                // "activate/deactivate" events.
+                this.bindResourceMethods('_activated', 'activateResource',
+                        'deactivateResource');
+                // Focuses/blurs the resources and fires the "focus/blur" events
+                // "activate/deactivate" events.
+                this.bindResourceMethods('_focused', 'focusResource',
+                        'blurResource');
+                // Expand/reduce the resources (shows it in the full view).
+                this.bindResourceMethods('_expanded', 'expandResource',
+                        'reduceResource');
             },
 
             /**
@@ -437,59 +448,30 @@
                 return type;
             },
 
-            /** Focus the specified resource and fires the "focus" event. */
-            focusResource : function(event) {
-                var resource = this.getResourceFromEvent(event);
-                if (this._isSame(this._focused, resource) && !event.force) {
-                    return;
-                }
-                if (this._focused) {
-                    this.blurResource(this.newEvent({
-                        resource : this._focused
-                    }));
-                }
-                this._focused = resource;
-                this.triggerMethod('focusResource', event);
-            },
-
             /**
-             * Blurs the focus from the specified resource (if it was previously
-             * focused) and fires the "blur" event.
+             * This utility method defines new methods corresponding to two
+             * resource state like activated/deactivated; focused/blurred etc.
              */
-            blurResource : function(event) {
-                var resource = this.getResourceFromEvent(event);
-                if (this._isSame(this._focused, resource)) {
-                    delete this._focused;
-                    this.triggerMethod('blurResource', event);
+            bindResourceMethods : function(field, onMethod, offMethod) {
+                this[onMethod] = function(event) {
+                    var resource = this.getResourceFromEvent(event);
+                    if (this._isSame(this[field], resource) && !event.force) {
+                        return;
+                    }
+                    if (this[field]) {
+                        this[offMethod](this.newEvent({
+                            resource : this[field]
+                        }));
+                    }
+                    this[field] = resource;
+                    this.triggerMethod(onMethod, event);
                 }
-            },
-
-            /** Activates the specified resource and fires the "activate" event. */
-            activateResource : function(event) {
-                var resource = this.getResourceFromEvent(event);
-                if (this._isSame(this._active, resource) && !event.force) {
-                    return;
-                }
-                if (this._active) {
-                    this.deactivateResource(this.newEvent({
-                        resource : this._active
-                    }));
-                }
-                // this.focusResource(event);
-                this._active = resource;
-                this.triggerMethod('activateResource', event);
-            },
-
-            /**
-             * Deactivates previously activated resource and fires the
-             * "deactivate" event.
-             */
-            deactivateResource : function(event) {
-                var resource = this.getResourceFromEvent(event);
-                if (this._isSame(this._active, resource)) {
-                    var r = this._active;
-                    delete this._active;
-                    this.triggerMethod('deactivateResource', event);
+                this[offMethod] = function(event) {
+                    var resource = this.getResourceFromEvent(event);
+                    if (this._isSame(this[field], resource)) {
+                        delete this[field];
+                        this.triggerMethod(offMethod, event);
+                    }
                 }
             },
 
@@ -1003,6 +985,16 @@
 
         /** It is a common superclass used to visualize resources. */
         Mosaic.ResourceView = Mosaic.TemplateView.extend({
+
+            initialize : function() {
+                var initialize = Mosaic.TemplateView.prototype.initialize;
+                initialize.apply(this, arguments);
+                this._bindResourceMethods('activateResource',
+                        'deactivateResource');
+                this._bindResourceMethods('focusResource', 'blurResource');
+                this._bindResourceMethods('expandResource', 'reduceResource');
+            },
+
             /** Returns the resource associated with this view */
             getResource : function() {
                 return this.options.resource;
@@ -1012,32 +1004,25 @@
                 return this.options.dataSet;
             },
             /**
-             * Fires an resource event (activateResource / deactivateResource /
-             * focusResource / blurResource ...).
+             * Append a pair of methods to this object. These methods fire
+             * events for activate/deactivate the state of the internal
+             * resource.
              */
-            _fireResourceEvent : function(method) {
-                var dataSet = this.getDataSet();
-                var resource = this.getResource();
-                var event = dataSet.newEvent({
-                    resource : resource
-                });
-                dataSet[method](event);
-            },
-            /** Activates the underlying resource */
-            activateResource : function() {
-                this._fireResourceEvent('activateResource');
-            },
-            /** Deactivates the underlying resource */
-            deactivateResource : function() {
-                this._fireResourceEvent('deactivateResource');
-            },
-            /** Focus the underlying resource */
-            focusResource : function() {
-                this._fireResourceEvent('focusResource');
-            },
-            /** Blurs the focused resource */
-            blurResource : function() {
-                this._fireResourceEvent('blurResource');
+            _bindResourceMethods : function(on, off) {
+                function fireResourceEvent(method) {
+                    var dataSet = this.getDataSet();
+                    var resource = this.getResource();
+                    var event = dataSet.newEvent({
+                        resource : resource
+                    });
+                    dataSet[method](event);
+                }
+                this[on] = function() {
+                    fireResourceEvent.call(this, on);
+                }
+                this[off] = function() {
+                    fireResourceEvent.call(this, off);
+                }
             }
         });
 
@@ -1338,8 +1323,6 @@
              */
             _bindDataEventListeners : function() {
                 this.listenTo(this._dataSet, 'activateResource', function(e) {
-                    console.log('event:activateResource')
-
                     var that = this;
                     var resource = that._dataSet.getResourceFromEvent(e);
                     var id = that._dataSet.getResourceId(resource);
@@ -1362,7 +1345,6 @@
                 this.listenTo(this._dataSet, 'deactivateResource', function(e) {
                 })
                 this.listenTo(this._dataSet, 'focusResource', function(e) {
-                    console.log('event:focusResource')
                     var viewPriority = 1;
                     this
                             ._showPopup(e, Mosaic.MapFocusedPopupView,
@@ -1566,6 +1548,41 @@
 
         /* ------------------------------------------------- */
 
+        /** Full view. Used to visualize individual resources in expanded mode. */
+        Mosaic.ExpandedView = Mosaic.DataSetView.extend({
+            type : 'ExpandedView',
+            setResourceView : function(view) {
+                console.log(view);
+            }
+        })
+
+        /** GeoJsonDataSet - ExpandedView adapter */
+        Mosaic.GeoJsonExpandedViewAdapter = Mosaic.ViewAdapter.extend({
+
+            /** Creates and returns a new rsource view */
+            newResourceView : Mosaic.newResourceView,
+
+            /** Renders the specified dataset on the view (on the list). */
+            render : function(view, dataSet) {
+                var that = this;
+                that._view = view;
+                that._dataSet = dataSet;
+                that.listenTo(that._dataSet, 'expandResource', function(event) {
+                    var resource = that._dataSet.getResourceFromEvent(event);
+                    var id = that._dataSet.getResourceId(resource);
+                    var view = that.newResourceView(Mosaic.ExpandedView,
+                            resource, that._view);
+                    that._view.setResourceView(view);
+                })
+            },
+            /** Removes all rendered resources from the list. */
+            remove : function() {
+                this.stopListening();
+            }
+        })
+
+        /* ------------------------------------------------- */
+
         /** Adapters of tilesets to the MapView */
         Mosaic.TileSetMapViewAdapter = Mosaic.ViewAdapter.extend({
             render : function(view, dataSet) {
@@ -1678,6 +1695,8 @@
                 Mosaic.GeoJsonMapViewAdapter);
         adapters.registerAdapter(Mosaic.ListView, Mosaic.GeoJsonDataSet,
                 Mosaic.GeoJsonListViewAdapter);
+        adapters.registerAdapter(Mosaic.ExpandedView, Mosaic.GeoJsonDataSet,
+                Mosaic.GeoJsonExpandedViewAdapter);
 
         return Mosaic;
     }
