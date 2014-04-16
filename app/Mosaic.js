@@ -455,9 +455,8 @@
             bindResourceMethods : function(field, onMethod, offMethod) {
                 this[onMethod] = function(event) {
                     var resource = this.getResourceFromEvent(event);
-                    if (this._isSame(this[field], resource) && !event.force) {
-                        return;
-                    }
+                    // if (this._isSame(this[field], resource) && !event.force)
+                    // { return; }
                     if (this[field]) {
                         this[offMethod](this.newEvent({
                             resource : this[field]
