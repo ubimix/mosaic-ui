@@ -527,20 +527,13 @@
             getTilesUrl : function() {
                 return this.options.tilesUrl;
             },
+            getDataGridUrl : function() {
+                return this.options.datagridUrl;
+            },
             getAttribution : function() {
                 return this.options.attribution;
             }
         })
-
-        /* --------------------------------------------------- */
-
-        /**
-         * This dataset corresponds to interactive tiles (UTFGrid). It returns
-         * all information loaded by the map represented in UTFGrid tiles.
-         */
-        Mosaic.GeoUtfGridSet = Mosaic.TilesDataSet.extend({
-            type : 'GeoUtfGridSet'
-        });
 
         /* --------------------------------------------------- */
 
@@ -1216,17 +1209,8 @@
 
         /* ------------------------------------------------- */
 
-        /** GeoJsonDataSet - MapView adapter */
-        Mosaic.GeoJsonMapViewAdapter = Mosaic.ViewAdapter.extend({
-
-            /**
-             * Initializes this data set adapter. It creates an internal index
-             * of Leaflet layers used to easy retrieve layeres by resource
-             * identifiers.
-             */
-            initialize : function() {
-                this._index = {};
-            },
+        /** DataSetMapAdapter - an abstract superclass for MapView adapters */
+        Mosaic.DataSetMapAdapter = Mosaic.ViewAdapter.extend({
 
             /** Creates and returns a new rsource view */
             newResourceView : Mosaic.newResourceView,
@@ -1249,10 +1233,10 @@
                             && AdapterType == that._popupViewType)
                         return;
                 }
-                var layer = that._index[resourceId];
+
+                var layer = that._getResourceLayer(resource);
                 // Exit if there is no layers corresponding to the
-                // specified
-                // resource
+                // specified resource
                 if (!layer) {
                     return;
                 }
@@ -1261,8 +1245,7 @@
                 var view = that.newResourceView(AdapterType, resource,
                         that._view);
                 // Exit if there is no visualization defined for the
-                // current
-                // resource type
+                // current resource type
                 if (!view) {
                     return;
                 }
@@ -1283,10 +1266,18 @@
                 });
 
                 var showPopup = null;
-                if (!layer._ismarker && e.coords) {
+                var geometry = resource.geometry || {};
+                var coords;
+                if (geometry.type == 'Point') {
+                    coords = geometry.coordinates;
+                }
+                if (!coords) {
+                    coords = e.coords;
+                }
+                if (coords) {
                     // Set the coordinates of the event for the popup.
-                    var lat = e.coords[1];
-                    var lng = e.coords[0];
+                    var lat = coords[1];
+                    var lng = coords[0];
                     var latlng = L.latLng(lat, lng);
                     popup.setLatLng(latlng);
                     showPopup = function() {
@@ -1324,8 +1315,7 @@
                 this.listenTo(this._dataSet, 'activateResource', function(e) {
                     var that = this;
                     var resource = that._dataSet.getResourceFromEvent(e);
-                    var id = that._dataSet.getResourceId(resource);
-                    var layer = that._index[id];
+                    var layer = that._getResourceLayer(resource);
                     if (!layer) {
                         return;
                     }
@@ -1358,13 +1348,17 @@
              * listeners activates / deactivate / focus or blur the
              * corresponding resource.
              */
-            _bindLayerEventListeners : function(resource, layer) {
+            _bindLayerEventListeners : function(layer, resourceProvider) {
                 var that = this;
                 /**
                  * Fires an resource event (activateResource /
                  * deactivateResource / focusResource / blurResource ...).
                  */
                 function fireResourceEvent(method, e) {
+                    var resource = resourceProvider(e);
+                    if (!resource)
+                        return;
+                    var resourceId = that._dataSet.getResourceId(resource);
                     var coords = [ e.latlng.lng, e.latlng.lat ];
                     var event = that._dataSet.newEvent({
                         resource : resource,
@@ -1372,7 +1366,6 @@
                     });
                     that._dataSet[method](event);
                 }
-                var resourceId = that._dataSet.getResourceId(resource);
                 layer.on('mouseover', function(e) {
                     fireResourceEvent('focusResource', e);
                 })
@@ -1382,6 +1375,66 @@
                 layer.on('click', function(e) {
                     fireResourceEvent('activateResource', e);
                 })
+            },
+
+            /**
+             * Returns options value corresponding to the specified key of the
+             * internal dataset
+             */
+            _getDatasetOptions : function(optionsKey, defaultValue) {
+                var value = Mosaic.Utils.getOption(this._dataSet, optionsKey);
+                if (value === undefined) {
+                    value = Mosaic.Utils.getOption(this._dataSet.options,
+                            optionsKey);
+                }
+                if (value === undefined) {
+                    value = defaultValue;
+                }
+                return value;
+            },
+
+            /** This method renders data on the view. */
+            render : function(view, dataSet) {
+                this._view = view;
+                this._dataSet = dataSet;
+                var that = this;
+                this._groupLayer = new L.FeatureGroup();
+                this._doRender(this._groupLayer);
+                var map = this._view.getMap();
+                map.addLayer(this._groupLayer);
+                that._bindDataEventListeners();
+            },
+
+            /** Removes data visualization from the parent view. */
+            remove : function() {
+                if (this._groupLayer) {
+                    var map = this._view.getMap();
+                    map.removeLayer(this._groupLayer);
+                    delete this._groupLayer;
+                }
+                this.stopListening();
+            },
+
+            /* Methods to overload in subclasses */
+
+            /** Returns a layer corresponding to the specified resource */
+            _getResourceLayer : function(e) {
+                throw new Error('Not implemented');
+            }
+        });
+
+        /* ------------------------------------------------- */
+
+        /** GeoJsonDataSet - MapView adapter */
+        Mosaic.GeoJsonMapViewAdapter = Mosaic.DataSetMapAdapter.extend({
+
+            /**
+             * Initializes this data set adapter. It creates an internal index
+             * of Leaflet layers used to easy retrieve layeres by resource
+             * identifiers.
+             */
+            initialize : function() {
+                this._index = {};
             },
 
             /**
@@ -1421,29 +1474,9 @@
                 return options;
             },
 
-            /**
-             * Returns options value corresponding to the specified key of the
-             * internal dataset
-             */
-            _getDatasetOptions : function(optionsKey, defaultValue) {
-                var value = Mosaic.Utils.getOption(this._dataSet, optionsKey);
-                if (value === undefined) {
-                    value = Mosaic.Utils.getOption(this._dataSet.options,
-                            optionsKey);
-                }
-                if (value === undefined) {
-                    value = defaultValue;
-                }
-                return value;
-            },
-
-            /** This method renders data on the view. */
-            render : function(view, dataSet) {
-                this._view = view;
-                this._dataSet = dataSet;
-                var map = view.getMap();
+            _doRender : function(groupLayer) {
                 var that = this;
-
+                this._index = {};
                 var clusterLayer = null;
                 var makeCluster = that._getDatasetOptions('clusterPoints',
                         false);
@@ -1456,7 +1489,6 @@
                     }, clusterOptions)
                     clusterLayer = new L.MarkerClusterGroup(clusterOptions);
                 }
-                this._groupLayer = new L.FeatureGroup();
                 _.each(this._dataSet.getResources(), function(resource) {
                     var geom = resource.geometry;
                     if (this._isEmptyGeometry(geom)) {
@@ -1469,34 +1501,31 @@
                         layer._ismarker = true;
                         return layer;
                     }, L.GeoJSON.coordsToLatLng, options);
-                    this._bindLayerEventListeners(resource, layer);
+                    this._bindLayerEventListeners(layer, function(e) {
+                        return resource;
+                    });
 
                     var resourceId = this._dataSet.getResourceId(resource);
                     this._index[resourceId] = layer;
                     if (clusterLayer && layer._ismarker) {
                         clusterLayer.addLayer(layer);
                     } else {
-                        this._groupLayer.addLayer(layer);
+                        groupLayer.addLayer(layer);
                     }
                 }, this);
                 if (clusterLayer) {
-                    this._groupLayer.addLayer(clusterLayer);
-                    this._groupLayer.clusterLayer = clusterLayer;
+                    groupLayer.addLayer(clusterLayer);
+                    groupLayer.clusterLayer = clusterLayer;
                 }
-                map.addLayer(this._groupLayer);
-                that._bindDataEventListeners();
             },
 
-            /** Removes data visualization from the parent view. */
-            remove : function() {
-                if (this._groupLayer) {
-                    var map = this._view.getMap();
-                    map.removeLayer(this._groupLayer);
-                    delete this._groupLayer;
-                }
-                this.stopListening();
-                this._index = {};
+            _getResourceLayer : function(resource) {
+                var that = this;
+                var id = that._dataSet.getResourceId(resource);
+                var layer = that._index[id];
+                return layer;
             }
+
         });
 
         /* ------------------------------------------------- */
@@ -1583,24 +1612,46 @@
         /* ------------------------------------------------- */
 
         /** Adapters of tilesets to the MapView */
-        Mosaic.TileSetMapViewAdapter = Mosaic.ViewAdapter.extend({
-            render : function(view, dataSet) {
-                this._view = view;
-                this._dataSet = dataSet;
-                var map = this._view.getMap();
+        Mosaic.TileSetMapViewAdapter = Mosaic.DataSetMapAdapter.extend({
+
+            _doRender : function(groupLayer) {
+                this._tilesLayer = undefined;
+                this._gridLayer = undefined;
                 var maxZoom = this._view.getMaxZoom();
                 var attribution = this._dataSet.getAttribution();
                 var tilesUrl = this._dataSet.getTilesUrl();
-                this._layer = L.tileLayer(tilesUrl, {
-                    attribution : attribution,
-                    maxZoom : maxZoom
-                }).addTo(map);
+                if (tilesUrl) {
+                    var layer = this._tilesLayer = L.tileLayer(tilesUrl, {
+                        attribution : attribution,
+                        maxZoom : maxZoom
+                    });
+                    groupLayer.addLayer(layer);
+                }
+
+                var utfgridUrl = this._dataSet.getDataGridUrl();
+                if (utfgridUrl) {
+                    var layer = this._gridLayer = new L.UtfGrid(utfgridUrl);
+                    this._bindLayerEventListeners(layer, function(e) {
+                        var data = e.data;
+                        if (!data)
+                            return null;
+                        if (_.isString(data.properties)) {
+                            data.properties = JSON.parse(data.properties);
+                            if (!data.properties.type) {
+                                data.properties.type = data.type;
+                            }
+                        }
+                        if (_.isString(data.geometry)) {
+                            data.geometry = JSON.parse(data.geometry);
+                        }
+                        return data;
+                    });
+                    groupLayer.addLayer(layer);
+                }
             },
-            remove : function() {
-                var map = this._view.getMap();
-                map.removeLayer(this._layer);
-                delete this._layer;
-                this.stopListening();
+
+            _getResourceLayer : function(resource) {
+                return this._gridLayer;
             }
         })
 
@@ -1685,6 +1736,162 @@
         }
 
         /* ------------------------------------------------- */
+
+        /**
+         * This class is used to configure an application using HTML elements as
+         * a source of references to DataSets, templates etc.
+         */
+        Mosaic.AppConfigurator = Mosaic.Class.extend({
+            /**
+             * This method initializes this object. It loads templates, loads
+             * datasets, activates all view panels, etc
+             */
+            initialize : function(options) {
+                this.options = options || {};
+                this.app = new Mosaic.App();
+                this._initTemplates();
+                this._initMapOptions();
+                this._initDataSets();
+                this._initDebug();
+                this._initViews();
+            },
+            /** Returns the application parameters (options). */
+            getOptions : function() {
+                return this.options || {};
+            },
+            /** Starts the application */
+            start : function() {
+                this.app.start();
+            },
+            /** Starts the application */
+            stop : function() {
+                this.app.stop();
+            },
+            /** Adds a set of GeoJSON objects to this application */
+            addGeoJsonDataSet : function(geoJson, options) {
+                var data = _.isArray(geoJson.features) ? geoJson.features : _
+                        .toArray(geoJson);
+                var options = _.extend({}, options, {
+                    data : data
+                });
+                var dataSet = new Mosaic.GeoJsonDataSet(options);
+                this.app.addDataSet(dataSet);
+            },
+            /**
+             * This method loads and registers all templates for application
+             * types. The main element containing templates is referenced by the
+             * "templatesSelector" application parameter.
+             */
+            _initTemplates : function() {
+                var options = this.getOptions();
+                var templateElm = $(options.templatesSelector).remove();
+                var templateHtml = '<div>' + templateElm.html() + '</div>';
+                Mosaic.registerViewAdapters(templateHtml);
+            },
+            /**
+             * Initializes all map options from the element referenced by the
+             * "mapSelector" application parameter.
+             */
+            _initMapOptions : function() {
+                var options = this.getOptions();
+                var mapElement = $(options.mapSelector);
+                var center = mapElement.data('center') || [ 0, 0 ];
+                var zoom = mapElement.data('zoom');
+                var minZoom = mapElement.data('min-zoom') || 2;
+                var maxZoom = mapElement.data('max-zoom') || 18;
+                var zoomControl = mapElement.data('zoom-control');
+                this.mapOptions = _.extend({
+                    app : this.app,
+                    el : mapElement,
+                    minZoom : minZoom,
+                    maxZoom : maxZoom,
+                    initialZoom : zoom,
+                    initialCenter : center,
+                }, options.mapOptions);
+            },
+            /**
+             * Loads and initializes all datasets defined in the HTML element
+             * referenced by the "datalayersSelector" application parameter.
+             */
+            _initDataSets : function() {
+                var options = this.getOptions();
+                var that = this;
+                $(options.datalayersSelector).each(function() {
+                    var elm = $(this);
+                    elm.remove();
+                    var dataSetOptions = that._extractDatasetParams(elm);
+                    var dataSet = new Mosaic.TilesDataSet(dataSetOptions);
+                    that.app.addDataSet(dataSet);
+                })
+            },
+            /**
+             * Adds a debug layers to the map. It allows to intercept clicks and
+             * show the current mouse position on the map.
+             */
+            _initDebug : function() {
+                Mosaic.DebugDataSet = Mosaic.DataSet.extend({});
+                var adapterManager = Mosaic.AdapterManager.getInstance();
+                adapterManager.registerAdapter(Mosaic.MapView,
+                        Mosaic.DebugDataSet, Mosaic.ViewAdapter.extend({
+                            render : function(view, data) {
+                                var map = view.getMap();
+                                map.on('click', function(e) {
+                                    console.log(map.getZoom(), '['
+                                            + e.latlng.lng + ',' + e.latlng.lat
+                                            + ']');
+                                })
+                            }
+                        }));
+                this.app.addDataSet(new Mosaic.DebugDataSet());
+            },
+            /** Initializes all views of this application */
+            _initViews : function() {
+                this.mapPanel = new Mosaic.MapView(this.mapOptions);
+            },
+            /** Extracts dataset parameters from the specified element. */
+            _extractDatasetParams : function(elm) {
+                var that = this;
+                var visible = elm.data('visible');
+                var tilesUrl = elm.data('tiles-url');
+                var datagridUrl = elm.data('utfgrid-url');
+                if (!tilesUrl && !datagridUrl)
+                    return null;
+                var forceReload = !!elm.data('force-reload');
+                if (forceReload) {
+                    tilesUrl = that._appendRandomParam(tilesUrl);
+                    datagridUrl = that._appendRandomParam(datagridUrl);
+                }
+                if (!that.zIndex)
+                    that.zIndex = 1;
+                var attributionElm = elm.find('.attribution');
+                var dataSetOptions = {
+                    attribution : attributionElm.html(),
+                    tilesUrl : tilesUrl,
+                    datagridUrl : datagridUrl,
+                    minZoom : elm.data('min-zoom') || that.mapOptions.minZoom,
+                    maxZoom : elm.data('max-zoom') || that.mapOptions.maxZoom,
+                    zIndex : that.zIndex++,
+                    visible : !!visible
+                };
+                return dataSetOptions;
+            },
+            /**
+             * Appends a random parameter to the given URL. This method is used
+             * to force resource re-loading.
+             */
+            _appendRandomParam : function(url) {
+                if (!url)
+                    return url;
+                var ch = (url.indexOf('?') < 0) ? '?' : '&';
+                url += ch;
+                url += 'x=' + Math.random() * 1000;
+                url += '-' + new Date().getTime();
+                return url;
+            }
+        })
+
+        /* ------------------------------------------------- */
+
         /** Default adapters registration */
 
         var adapters = Mosaic.AdapterManager.getInstance();
