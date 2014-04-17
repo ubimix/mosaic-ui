@@ -404,6 +404,9 @@
                     var parentType = this.getParentResourceType(resourceType);
                     resourceType = parentType;
                 }
+                if (!adapter) {
+                    adapter = adapters.getAdapter('Default', adapterType);
+                }
                 return adapter;
             },
 
@@ -708,6 +711,9 @@
              * <code>&lt;div data-action-click="sayHello">Hello&lt;/div></code>
              */
             bindListeners : function(elm, event, attrName) {
+                var element = elm[0];
+                if (!element)
+                    return;
                 if (attrName === undefined) {
                     attrName = 'data-action-' + event;
                 }
@@ -854,7 +860,7 @@
             View = View || this.extend({});
 
             // Define static constants
-            var scripts = e.find('script[data-type="const"]');
+            var scripts = e.find('script[data-type="static"]');
             _.each(Mosaic.elementToObject(scripts), function(obj) {
                 _.extend(View, obj);
             }, this);
@@ -1029,11 +1035,16 @@
             var result = null;
             var View = this._dataSet.getResourceAdapter(resource, Type);
             if (View) {
-                result = new View({
-                    resource : resource,
-                    dataSet : this._dataSet,
-                    parentView : parentView
-                });
+                if (!_.isFunction(View.isValid) || View.isValid(resource)) {
+                    result = new View({
+                        resource : resource,
+                        dataSet : this._dataSet,
+                        parentView : parentView
+                    });
+                    if (_.isFunction(result.isValid) && !result.isValid(result)) {
+                        result = null;
+                    }
+                }
             }
             return result;
         };
@@ -1308,6 +1319,23 @@
             },
 
             /**
+             * Closes popup if it shows the specified resource with the same
+             * priority level
+             */
+            _closePopup : function(e, AdapterType, viewPriority) {
+                var that = this;
+                var resource = that._dataSet.getResourceFromEvent(e);
+                var resourceId = that._dataSet.getResourceId(resource);
+                if (!resource || !resourceId)
+                    return;
+                if (resourceId == that._popupResourceId
+                        && AdapterType == that._popupViewType) {
+                    var map = that._view.getMap();
+                    map.closePopup();
+                }
+            },
+
+            /**
              * This internal method binds data set event listeners visualizing
              * resources in popups.
              */
@@ -1340,6 +1368,9 @@
                                     viewPriority);
                 });
                 this.listenTo(this._dataSet, 'blurResource', function(e) {
+                    var viewPriority = 1;
+                    this._closePopup(e, Mosaic.MapFocusedPopupView,
+                            viewPriority);
                 })
             },
 
