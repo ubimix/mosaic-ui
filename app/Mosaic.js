@@ -216,6 +216,17 @@
             function extend() {
                 return newClass.apply(this, arguments);
             }
+            /**
+             * Returns <code>true</code> if this type is the same as the
+             * specified object.
+             */
+            function isSameType(obj) {
+                if (!obj || !obj._typeId)
+                    return false;
+                return this._typeId == obj._typeId;
+            }
+
+            var typeCounter = 0;
             function newClass() {
                 function Type() {
                     if (this.initialize) {
@@ -223,6 +234,7 @@
                     }
                 }
                 Type.extend = extend;
+                Type.isSameType = isSameType;
                 if (this) {
                     copy(Type, this);
                     copy(Type.prototype, this.prototype);
@@ -230,6 +242,7 @@
                 _.each(arguments, function(fields) {
                     copy(Type.prototype, fields);
                 })
+                Type._typeId = typeCounter++;
                 return Type;
             }
             return newClass();
@@ -248,7 +261,29 @@
             setOptions : function(options) {
                 this.options = _.extend(this.options || {}, options);
             }
+
         })
+
+        /* ------------------------------------------------- */
+
+        /**
+         * A simple Promise-like wrapper around jQuery promises.
+         */
+        Mosaic.Promise = function(param) {
+            var deferred = $.Deferred();
+            deferred.resolve(param);
+            return deferred.promise();
+        }
+        /**
+         * Returns a Deferred object containing the following methods and
+         * fields: 1) resolve - a function used to resolve the deferred object
+         * 2) reject - a rejection function 3) promise - a promise field
+         */
+        Mosaic.Promise.defer = function() {
+            var deferred = $.Deferred();
+            deferred.promise = deferred.promise();
+            return deferred;
+        }
 
         /* --------------------------------------------------- */
 
@@ -1051,6 +1086,94 @@
 
         /* ------------------------------------------------- */
 
+        /**
+         * This is an utility class which is used to control the state of popup
+         * windows on the map.
+         */
+        Mosaic.MapPopupControl = Mosaic.Class.extend({
+            /** Initializes this object */
+            initialize : function(options) {
+                this.options = options;
+                if (!this.options || !this.options.map)
+                    throw new Error('Options or a map are not defined.');
+                this._map = this.options.map;
+            },
+            /**
+             * Returns a promise which is resolved when the popup window is
+             * closed.
+             */
+            onClose : function() {
+                var that = this;
+                if (that._deferred) {
+                    return that._deferred.promise.then(function() {
+                        console.log(' * Finish closing', that._priority)
+                    });
+                }
+                return Mosaic.Promise();
+            },
+            /**
+             * Opens a new popup window and returns a promise allowing to wait
+             * when the operation is finished.
+             */
+            open : function(options) {
+                var that = this;
+                var deferred;
+                return this.close(options).then(function(result) {
+                    if (!result)
+                        return false;
+                    that._priority = options.priority || 0;
+                    deferred = that._deferred = Mosaic.Promise.defer();
+                    that._popup = L.popup(options);
+                    that._popup.on('close', function() {
+                        deferred.resolve();
+                    })
+                    deferred.promise.then(function() {
+                        that._priority = 0;
+                        delete that._popup;
+                    });
+                    return Mosaic.Promise().then(function() {
+                        if (_.isFunction(options.createView)) {
+                            return options.createView(that._popup);
+                        }
+                    }).then(function() {
+                        var lat = options.coordinates[1];
+                        var lng = options.coordinates[0];
+                        var latlng = L.latLng(lat, lng);
+                        that._popup.setLatLng(latlng);
+                        setTimeout(function() {
+                            if (options.layer && options.layer.bindPopup) {
+                                options.layer.bindPopup(that._popup);
+                                options.layer.openPopup();
+                            } else {
+                                that._popup.openOn(that._map);
+                            }
+                        }, 1);
+                        return true;
+                    }, function(err) {
+                        deferred.reject(err);
+                        return false;
+                    })
+                });
+            },
+            /**
+             * Closes the popup window (if it is opened) and returns a promise
+             * allowing to continue operations when the operation is finished.
+             */
+            close : function(options) {
+                var priority = options.priority || 0;
+                var thisPriority = this._priority || 0;
+                if (priority >= thisPriority) {
+                    var promise = this.onClose();
+                    this._map.closePopup();
+                    return promise.then(function() {
+                        return true;
+                    });
+                } else {
+                    return Mosaic.Promise(false);
+                }
+            }
+        });
+
         /** A view responsible for the map visualization. */
         Mosaic.MapView = Mosaic.DataSetView.extend({
             type : 'MapView',
@@ -1062,6 +1185,20 @@
             getMap : function() {
                 return this._map;
             },
+
+            /**
+             * Returns an object controlling the state of popup windows on the
+             * map
+             */
+            getPopupControl : function() {
+                if (!this._popupControl) {
+                    this._popupControl = new Mosaic.MapPopupControl({
+                        map : this._map
+                    });
+                }
+                return this._popupControl;
+            },
+
             /** Returns the maximal zoom level for the map. */
             getMaxZoom : function() {
                 return this.options.maxZoom || 18;
@@ -1218,10 +1355,19 @@
             type : 'MapFocusedPopupView'
         });
 
-        /* ------------------------------------------------- */
-
-        /** DataSetMapAdapter - an abstract superclass for MapView adapters */
+        /**
+         * DataSetMapAdapter - an abstract superclass for MapView adapters
+         */
         Mosaic.DataSetMapAdapter = Mosaic.ViewAdapter.extend({
+
+            /** Initializes this object */
+            initialize : function(options) {
+                this.options = options || {};
+                var timeout = 100;
+                _.each([ '_showPopup', '_closePopup' ], function(name) {
+                    this[name] = _.debounce(_.bind(this[name], this), timeout);
+                }, this);
+            },
 
             /** Creates and returns a new rsource view */
             newResourceView : Mosaic.newResourceView,
@@ -1237,17 +1383,10 @@
                 var resourceId = that._dataSet.getResourceId(resource);
                 if (!resource || !resourceId)
                     return;
-                if (resourceId == that._popupResourceId) {
-                    if (viewPriority < that._popupViewPriority)
-                        return;
-                    if (viewPriority == that._popupViewPriority
-                            && AdapterType == that._popupViewType)
-                        return;
-                }
 
-                var layer = that._getResourceLayer(resource);
                 // Exit if there is no layers corresponding to the
                 // specified resource
+                var layer = that._getResourceLayer(resource);
                 if (!layer) {
                     return;
                 }
@@ -1261,22 +1400,6 @@
                     return;
                 }
 
-                // Get popup options from the view
-                var options = Mosaic.Utils.getOptions(view.popupOptions);
-                // Create a new popup
-                var popup = L.popup(options);
-                that._popupResourceId = resourceId;
-                that._popupViewType = AdapterType;
-                that._popupViewPriority = viewPriority;
-                popup.on('close', function() {
-                    if (resourceId != that._popupResourceId)
-                        return;
-                    delete that._popupResourceId;
-                    delete that._popupViewType;
-                    delete that._popupViewPriority;
-                });
-
-                var showPopup = null;
                 var geometry = resource.geometry || {};
                 var coords;
                 if (geometry.type == 'Point') {
@@ -1285,54 +1408,44 @@
                 if (!coords) {
                     coords = e.coords;
                 }
-                if (coords) {
-                    // Set the coordinates of the event for the popup.
-                    var lat = coords[1];
-                    var lng = coords[0];
-                    var latlng = L.latLng(lat, lng);
-                    popup.setLatLng(latlng);
-                    showPopup = function() {
-                        var map = that._view.getMap();
-                        popup.openOn(map);
-                    }
-                } else {
-                    // If the event does not contain coordinates - then
-                    // try to
-                    // bind the popup to the layer
-                    showPopup = function() {
-                        layer.bindPopup(popup).openPopup();
-                    }
-                }
-                if (!showPopup) {
-                    return;
-                }
-
-                view.render();
-
-                // Set the popup content
-                var element = view.getElement();
-                popup.setContent(element[0]);
-
-                // Open the popup
                 var map = that._view.getMap();
-                setTimeout(showPopup, 10);
+                var counter = map._popupCounter = (map._popupCounter || 0) + 1;
+                var control = that._view.getPopupControl();
+                control //
+                .open(
+                        {
+                            priority : viewPriority,
+                            coordinates : coords,
+                            layer : layer,
+                            createView : function(popup) {
+                                var options = Mosaic.Utils
+                                        .getOptions(view.popupOptions);
+                                view.render();
+                                // Set the popup content
+                                var element = view.getElement();
+                                popup.setContent(element[0]);
+                                console.log(counter + '-1) createView',
+                                        control._priority, element[0]);
+                            }
+                        }) //
+                .then(function() {
+                    control.onClose().then(function() {
+                        console.log(counter + '-3) Closed', control._priority)
+                        control._priority = 0;
+                    })
+                    console.log(counter + '-2) Opened!', control._priority);
+                });
             },
 
             /**
-             * Closes popup if it shows the specified resource with the same
-             * priority level
+             * clos Closes popup if it shows the specified resource with the
+             * same priority level
              */
             _closePopup : function(e, AdapterType, viewPriority) {
-                var that = this;
-                var resource = that._dataSet.getResourceFromEvent(e);
-                var resourceId = that._dataSet.getResourceId(resource);
-                if (!resource || !resourceId)
-                    return;
-                if (resourceId == that._popupResourceId
-                        && AdapterType == that._popupViewType) {
-                    var map = that._view.getMap();
-                    map.closePopup();
-                }
+                var control = this._view.getPopupControl();
+                return control.close({
+                    priority : viewPriority
+                });
             },
 
             /**
@@ -1465,6 +1578,8 @@
              * identifiers.
              */
             initialize : function() {
+                var parent = Mosaic.DataSetMapAdapter.prototype;
+                parent.initialize.apply(this, arguments);
                 this._index = {};
             },
 
@@ -1489,7 +1604,7 @@
                     view.render();
                     options = _.extend(options, Mosaic.Utils
                             .getOptions(view.options));
-                    var iconOptions = Mosaic.Utils.getOptions(view.icon)
+                    var iconOptions = Mosaic.Utils.getOptions(view.icon);
                     if (Mosaic.MapMarkerView.hasHtmlMarker(view)) {
                         iconOptions.html = view.getElement().html();
                         iconOptions = _.extend({
@@ -1644,6 +1759,11 @@
 
         /** Adapters of tilesets to the MapView */
         Mosaic.TileSetMapViewAdapter = Mosaic.DataSetMapAdapter.extend({
+
+            initialize : function() {
+                var parent = Mosaic.DataSetMapAdapter.prototype;
+                parent.initialize.apply(this, arguments);
+            },
 
             _doRender : function(groupLayer) {
                 this._tilesLayer = undefined;
