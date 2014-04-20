@@ -1091,87 +1091,70 @@
          * windows on the map.
          */
         Mosaic.MapPopupControl = Mosaic.Class.extend({
+
             /** Initializes this object */
             initialize : function(options) {
                 this.options = options;
-                if (!this.options || !this.options.map)
-                    throw new Error('Options or a map are not defined.');
-                this._map = this.options.map;
             },
-            /**
-             * Returns a promise which is resolved when the popup window is
-             * closed.
-             */
-            onClose : function() {
-                var that = this;
-                if (that._deferred) {
-                    return that._deferred.promise.then(function() {
-                        console.log(' * Finish closing', that._priority)
-                    });
-                }
-                return Mosaic.Promise();
-            },
+
             /**
              * Opens a new popup window and returns a promise allowing to wait
              * when the operation is finished.
              */
             open : function(options) {
                 var that = this;
-                var deferred;
-                return this.close(options).then(function(result) {
-                    if (!result)
-                        return false;
-                    that._priority = options.priority || 0;
-                    deferred = that._deferred = Mosaic.Promise.defer();
-                    that._popup = L.popup(options);
-                    that._popup.on('close', function() {
-                        deferred.resolve();
-                    })
-                    deferred.promise.then(function() {
-                        that._priority = 0;
-                        delete that._popup;
-                    });
-                    return Mosaic.Promise().then(function() {
-                        if (_.isFunction(options.createView)) {
-                            return options.createView(that._popup);
-                        }
-                    }).then(function() {
-                        var lat = options.coordinates[1];
-                        var lng = options.coordinates[0];
-                        var latlng = L.latLng(lat, lng);
-                        that._popup.setLatLng(latlng);
-                        setTimeout(function() {
-                            if (options.layer && options.layer.bindPopup) {
-                                options.layer.bindPopup(that._popup);
-                                options.layer.openPopup();
-                            } else {
-                                that._popup.openOn(that._map);
-                            }
-                        }, 1);
-                        return true;
-                    }, function(err) {
-                        deferred.reject(err);
-                        return false;
-                    })
-                });
+                var result = false;
+                if (!_.isFunction(options.action)
+                        || !that._checkPriority(options)) {
+                    return Mosaic.Promise();
+                } else {
+                    return that.close(options).then(function(result) {
+                        that._priority = options.priority || 0;
+                        return options.action();
+                    }).then(
+                            function(deferred) {
+                                that._deferred = deferred
+                                        || new Mosaic.Promise.defer();
+                                var promise = that._deferred.promise;
+                                promise.then(function() {
+                                    that._priority = 0;
+                                    // delete that._deferred;
+                                });
+                                return promise;
+                            });
+                }
             },
+
             /**
              * Closes the popup window (if it is opened) and returns a promise
              * allowing to continue operations when the operation is finished.
              */
             close : function(options) {
+                var that = this;
+                var result = false;
+                var promise = Mosaic.Promise();
+                if (that._checkPriority(options)) {
+                    result = true;
+                    if (that._deferred) {
+                        that._deferred.resolve();
+                        promise = that._deferred.promise;
+                    }
+                }
+                return promise.then(function() {
+                    return result;
+                });
+            },
+
+            /**
+             * Checks if the specified options contains the minimal required
+             * level of priority to open the popup
+             */
+            _checkPriority : function(options) {
                 var priority = options.priority || 0;
                 var thisPriority = this._priority || 0;
-                if (priority >= thisPriority) {
-                    var promise = this.onClose();
-                    this._map.closePopup();
-                    return promise.then(function() {
-                        return true;
-                    });
-                } else {
-                    return Mosaic.Promise(false);
-                }
-            }
+                return priority >= thisPriority;
+            },
+
         });
 
         /** A view responsible for the map visualization. */
@@ -1364,7 +1347,7 @@
             initialize : function(options) {
                 this.options = options || {};
                 var timeout = 100;
-                _.each([ '_showPopup', '_closePopup' ], function(name) {
+                _.each([ /* '_showPopup' , '_closePopup' */], function(name) {
                     this[name] = _.debounce(_.bind(this[name], this), timeout);
                 }, this);
             },
@@ -1400,6 +1383,9 @@
                     return;
                 }
 
+                // Render the view
+                view.render();
+
                 var geometry = resource.geometry || {};
                 var coords;
                 if (geometry.type == 'Point') {
@@ -1408,33 +1394,56 @@
                 if (!coords) {
                     coords = e.coords;
                 }
-                var map = that._view.getMap();
-                var counter = map._popupCounter = (map._popupCounter || 0) + 1;
-                var control = that._view.getPopupControl();
-                control //
-                .open(
-                        {
-                            priority : viewPriority,
-                            coordinates : coords,
-                            layer : layer,
-                            createView : function(popup) {
-                                var options = Mosaic.Utils
-                                        .getOptions(view.popupOptions);
-                                view.render();
-                                // Set the popup content
-                                var element = view.getElement();
-                                popup.setContent(element[0]);
-                                console.log(counter + '-1) createView',
-                                        control._priority, element[0]);
-                            }
-                        }) //
-                .then(function() {
-                    control.onClose().then(function() {
-                        console.log(counter + '-3) Closed', control._priority)
-                        control._priority = 0;
+
+                // Get the popup options from the view
+                var options = Mosaic.Utils.getOptions(view.popupOptions);
+
+                var openPopup = function() {
+                    var map = that._view.getMap();
+
+                    // Create a new popup
+                    var popup = L.popup(options);
+
+                    // Set the popup content
+                    var element = view.getElement();
+                    popup.setContent(element[0]);
+
+                    // Set the coordinates of the popup
+                    var lat = coords[1];
+                    var lng = coords[0];
+                    var latlng = L.latLng(lat, lng);
+                    popup.setLatLng(latlng);
+
+                    // Prepare the resulting deferred object
+                    // It is used to close the popup
+                    var deferred = Mosaic.Promise.defer();
+                    popup.on('close', function() {
+                        deferred.resolve();
                     })
-                    console.log(counter + '-2) Opened!', control._priority);
-                });
+                    deferred.then(function() {
+                        if (popup) {
+                            map.closePopup();
+                        }
+                    })
+                    // Open the popup
+                    setTimeout(function() {
+                        if (layer.bindPopup) {
+                            layer.bindPopup(popup);
+                            layer.openPopup();
+                        } else {
+                            popup.openOn(map);
+                        }
+                    }, 1);
+                    return deferred;
+                }
+
+                var control = that._view.getPopupControl();
+                control.open({
+                    priority : viewPriority,
+                    coordinates : coords,
+                    layer : layer,
+                    action : openPopup
+                }).done();
             },
 
             /**
