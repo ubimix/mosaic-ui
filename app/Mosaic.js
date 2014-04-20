@@ -391,6 +391,29 @@
 
         /* --------------------------------------------------- */
 
+        /** List of resource events */
+        Mosaic.ResourceStates = [
+        // Activates/deactivates the resources and fires the
+        // "activate/deactivate" events.
+        {
+            field : '_activated',
+            on : 'activateResource',
+            off : 'deactivateResource'
+        },
+        // Focuses/blurs the resources and fires the "focus/blur" events
+        // "activate/deactivate" events.
+        {
+            field : '_focused',
+            on : 'focusResource',
+            off : 'blurResource'
+        },
+        // Expand/reduce the resources (shows it in the full view).
+        {
+            field : '_expanded',
+            on : 'expandResource',
+            off : 'reduceResource'
+        } ];
+
         /**
          * A common super-class for all "data sets" giving access to resources.
          * Each dataset could be seen as a collection of resources.
@@ -412,17 +435,25 @@
             initialize : function(options) {
                 this.setOptions(options);
                 this._dataSets = {};
-                // Activates/deactivates the resources and fires the
-                // "activate/deactivate" events.
-                this.bindResourceMethods('_activated', 'activateResource',
-                        'deactivateResource');
-                // Focuses/blurs the resources and fires the "focus/blur" events
-                // "activate/deactivate" events.
-                this.bindResourceMethods('_focused', 'focusResource',
-                        'blurResource');
-                // Expand/reduce the resources (shows it in the full view).
-                this.bindResourceMethods('_expanded', 'expandResource',
-                        'reduceResource');
+                _.each(Mosaic.ResourceStates, function(conf) {
+                    this[conf.on] = function(event) {
+                        var resource = this.getResourceFromEvent(event);
+                        if (this[conf.field]) {
+                            this[conf.off](this.newEvent({
+                                resource : this[conf.field]
+                            }));
+                        }
+                        this[conf.field] = resource;
+                        this.triggerMethod(conf.on, event);
+                    }
+                    this[conf.off] = function(event) {
+                        var resource = this.getResourceFromEvent(event);
+                        if (this._isSame(this[conf.field], resource)) {
+                            delete this[conf.field];
+                            this.triggerMethod(conf.off, event);
+                        }
+                    }
+                }, this);
             },
 
             /**
@@ -484,32 +515,6 @@
                 else
                     type = null;
                 return type;
-            },
-
-            /**
-             * This utility method defines new methods corresponding to two
-             * resource state like activated/deactivated; focused/blurred etc.
-             */
-            bindResourceMethods : function(field, onMethod, offMethod) {
-                this[onMethod] = function(event) {
-                    var resource = this.getResourceFromEvent(event);
-                    // if (this._isSame(this[field], resource) && !event.force)
-                    // { return; }
-                    if (this[field]) {
-                        this[offMethod](this.newEvent({
-                            resource : this[field]
-                        }));
-                    }
-                    this[field] = resource;
-                    this.triggerMethod(onMethod, event);
-                }
-                this[offMethod] = function(event) {
-                    var resource = this.getResourceFromEvent(event);
-                    if (this._isSame(this[field], resource)) {
-                        delete this[field];
-                        this.triggerMethod(offMethod, event);
-                    }
-                }
             },
 
             /**
@@ -1018,16 +1023,10 @@
 
         /** It is a common superclass used to visualize resources. */
         Mosaic.ResourceView = Mosaic.TemplateView.extend({
-
             initialize : function() {
                 var initialize = Mosaic.TemplateView.prototype.initialize;
                 initialize.apply(this, arguments);
-                this._bindResourceMethods('activateResource',
-                        'deactivateResource');
-                this._bindResourceMethods('focusResource', 'blurResource');
-                this._bindResourceMethods('expandResource', 'reduceResource');
             },
-
             /** Returns the resource associated with this view */
             getResource : function() {
                 return this.options.resource;
@@ -1036,28 +1035,27 @@
             getDataSet : function() {
                 return this.options.dataSet;
             },
-            /**
-             * Append a pair of methods to this object. These methods fire
-             * events for activate/deactivate the state of the internal
-             * resource.
-             */
-            _bindResourceMethods : function(on, off) {
-                function fireResourceEvent(method) {
-                    var dataSet = this.getDataSet();
-                    var resource = this.getResource();
-                    var event = dataSet.newEvent({
-                        resource : resource
-                    });
-                    dataSet[method](event);
-                }
-                this[on] = function() {
-                    fireResourceEvent.call(this, on);
-                }
-                this[off] = function() {
-                    fireResourceEvent.call(this, off);
-                }
-            }
         });
+        /** Add methods firing events on the underlying dataset */
+        (function() {
+            function fireResourceEvent(method) {
+                var dataSet = this.getDataSet();
+                var resource = this.getResource();
+                var event = dataSet.newEvent({
+                    resource : resource
+                });
+                dataSet[method](event);
+            }
+            var proto = Mosaic.ResourceView.prototype;
+            _.each(Mosaic.ResourceStates, function(conf) {
+                proto[conf.on] = function() {
+                    fireResourceEvent.call(this, conf.on);
+                }
+                proto[conf.off] = function() {
+                    fireResourceEvent.call(this, conf.off);
+                }
+            });
+        })();
 
         /* ------------------------------------------------- */
 
@@ -1911,6 +1909,7 @@
                 this.app = new Mosaic.App();
                 this._initTemplates();
                 this._initMapOptions();
+                this._initListOptions();
                 this._initDataSets();
                 this._initDebug();
                 this._initViews();
@@ -1970,6 +1969,18 @@
                 }, options.mapOptions);
             },
             /**
+             * Initializes list options from the element referenced by the
+             * "listSelector" application parameter.
+             */
+            _initListOptions : function() {
+                var options = this.getOptions();
+                var listElement = $(options.listSelector);
+                this.listOptions = _.extend({
+                    app : this.app,
+                    el : listElement
+                }, options.listOptions);
+            },
+            /**
              * Loads and initializes all datasets defined in the HTML element
              * referenced by the "datalayersSelector" application parameter.
              */
@@ -2007,6 +2018,7 @@
             /** Initializes all views of this application */
             _initViews : function() {
                 this.mapPanel = new Mosaic.MapView(this.mapOptions);
+                this.listPanel = new Mosaic.ListView(this.listOptions);
             },
             /** Extracts dataset parameters from the specified element. */
             _extractDatasetParams : function(elm) {
