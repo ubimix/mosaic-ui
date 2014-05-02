@@ -11,6 +11,6 @@
     },
     "devDependencies" : {
         "mocha" : "*",
-        "expect" : "*"
+        "chai" : "*"
     }
 }

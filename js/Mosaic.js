@@ -391,29 +391,6 @@
 
         /* --------------------------------------------------- */
 
-        /** List of resource events */
-        Mosaic.ResourceStates = [
-        // Activates/deactivates the resources and fires the
-        // "activate/deactivate" events.
-        {
-            field : '_activated',
-            on : 'activateResource',
-            off : 'deactivateResource'
-        },
-        // Focuses/blurs the resources and fires the "focus/blur" events
-        // "activate/deactivate" events.
-        {
-            field : '_focused',
-            on : 'focusResource',
-            off : 'blurResource'
-        },
-        // Expand/reduce the resources (shows it in the full view).
-        {
-            field : '_expanded',
-            on : 'expandResource',
-            off : 'reduceResource'
-        } ];
-
         /**
          * A common super-class for all "data sets" giving access to resources.
          * Each dataset could be seen as a collection of resources.
@@ -435,21 +412,43 @@
             initialize : function(options) {
                 this.setOptions(options);
                 this._dataSets = {};
-                _.each(Mosaic.ResourceStates, function(conf) {
+                var resourceStates = Mosaic.DataSet.getResourceStates();
+                _.each(resourceStates, function(conf) {
+                    function checkEvent(event) {
+                        if (!event.priority)
+                            event.priority = conf.priority || 0;
+                        return event;
+                    }
                     this[conf.on] = function(event) {
-                        var resource = this.getResourceFromEvent(event);
-                        if (this[conf.field]) {
-                            this[conf.off](this.newEvent({
-                                resource : this[conf.field]
-                            }));
+                        event = checkEvent(event);
+                        var priorityKey = conf.field + '_priority';
+                        var oldPriority = this[priorityKey] || 0;
+                        var newPriority = event.priority;
+                        if (oldPriority > newPriority) {
+                            return;
                         }
-                        this[conf.field] = resource;
-                        this.triggerMethod(conf.on, event);
+                        var resource = this.getResourceFromEvent(event);
+                        var oldResource = this[conf.field];
+                        var fire = conf.force || event.force
+                                || !this._isSame(oldResource, resource);
+                        if (fire) {
+                            if (oldResource) {
+                                this[conf.off].call(this, this.newEvent({
+                                    resource : oldResource
+                                }));
+                            }
+                            this[priorityKey] = newPriority;
+                            this[conf.field] = resource;
+                            this.triggerMethod(conf.on, event);
+                        }
                     }
                     this[conf.off] = function(event) {
+                        var oldResource = this[conf.field];
                         var resource = this.getResourceFromEvent(event);
-                        if (this._isSame(this[conf.field], resource)) {
+                        if (!resource || this._isSame(oldResource, resource)) {
                             delete this[conf.field];
+                            var priorityKey = conf.field + '_priority';
+                            delete this[priorityKey];
                             this.triggerMethod(conf.off, event);
                         }
                     }
@@ -535,10 +534,64 @@
 
             /** Create and returns an event for the specified resource */
             newEvent : function(event) {
-                event.dataSet = this;
-                return event;
+                return _.extend({
+                    priority : 0,
+                    dataSet : this
+                }, event);
             }
         });
+
+        /* Static methods associated with the Mosaic.DataSet class. */
+        _.extend(Mosaic.DataSet, {
+
+            /**
+             * Registers new resource states. Each resource state contain the
+             * following fields:
+             * 
+             * @param state.field
+             *            the field in the DataSet object keeping the resource
+             *            state value
+             * @param state.on
+             *            name of the method activating the resource state
+             * @param state.off
+             *            name of the method deactivating the resource state
+             */
+            registerResourceStates : function(states) {
+                states = _.toArray(states);
+                this._resourceStates = this._resourceStates || [];
+                this._resourceStates = this._resourceStates.concat(states);
+            },
+            /** This method returns all possible resource states. */
+            getResourceStates : function() {
+                return this._resourceStates || [];
+            }
+        });
+
+        /** Registeres a list of resource events */
+        Mosaic.DataSet.registerResourceStates([
+        // Activates/deactivates the resources and fires the
+        // "activate/deactivate" events.
+        {
+            field : '_activated',
+            priority : 2,
+            on : 'activateResource',
+            off : 'deactivateResource'
+        },
+        // Focuses/blurs the resources and fires the "focus/blur" events
+        // "activate/deactivate" events.
+        {
+            field : '_focused',
+            priority : 1,
+            on : 'focusResource',
+            off : 'blurResource'
+        },
+        // Expand/reduce the resources (shows it in the full view).
+        {
+            field : '_expanded',
+            priority : 3,
+            on : 'expandResource',
+            off : 'reduceResource'
+        } ]);
 
         /* --------------------------------------------------- */
         /**
@@ -1094,9 +1147,30 @@
 
         /** It is a common superclass used to visualize resources. */
         Mosaic.ResourceView = Mosaic.TemplateView.extend({
+            /** Fires an event using the specified method. */
+            _fireResourceEvent : function(event, method) {
+                var dataSet = this.getDataSet();
+                var resource = this.getResource();
+                var event = dataSet.newEvent({
+                    priority : event.priority,
+                    resource : resource
+                });
+                dataSet[method](event);
+            },
+            /** Initializes this instance */
             initialize : function() {
                 var initialize = Mosaic.TemplateView.prototype.initialize;
                 initialize.apply(this, arguments);
+                var that = this;
+                var resourceStates = Mosaic.DataSet.getResourceStates();
+                _.each(resourceStates, function(conf) {
+                    that[conf.on] = function(e) {
+                        this._fireResourceEvent(e, conf.on);
+                    }
+                    that[conf.off] = function(e) {
+                        this._fireResourceEvent(e, conf.off);
+                    }
+                });
             },
             /** Returns the resource associated with this view */
             getResource : function() {
@@ -1107,26 +1181,6 @@
                 return this.options.dataSet;
             },
         });
-        /** Add methods firing events on the underlying dataset */
-        (function() {
-            function fireResourceEvent(method) {
-                var dataSet = this.getDataSet();
-                var resource = this.getResource();
-                var event = dataSet.newEvent({
-                    resource : resource
-                });
-                dataSet[method](event);
-            }
-            var proto = Mosaic.ResourceView.prototype;
-            _.each(Mosaic.ResourceStates, function(conf) {
-                proto[conf.on] = function() {
-                    fireResourceEvent.call(this, conf.on);
-                }
-                proto[conf.off] = function() {
-                    fireResourceEvent.call(this, conf.off);
-                }
-            });
-        })();
 
         /* ------------------------------------------------- */
 
@@ -1139,6 +1193,9 @@
             var result = null;
             var View = this._dataSet.getResourceAdapter(resource, Type);
             if (View) {
+                if (_.isFunction(View.initialize)) {
+                    View.initialize(resource);
+                }
                 if (!_.isFunction(View.isValid) || View.isValid(resource)) {
                     result = new View({
                         resource : resource,
@@ -1540,8 +1597,8 @@
                     if (!layer) {
                         return;
                     }
+                    var viewPriority = e.priority;
                     var doShow = function() {
-                        var viewPriority = 2;
                         that._showPopup(e, Mosaic.MapActivePopupView,
                                 viewPriority);
                     };
@@ -1555,13 +1612,13 @@
                 this.listenTo(this._dataSet, 'deactivateResource', function(e) {
                 })
                 this.listenTo(this._dataSet, 'focusResource', function(e) {
-                    var viewPriority = 1;
+                    var viewPriority = e.priority;
                     this
                             ._showPopup(e, Mosaic.MapFocusedPopupView,
                                     viewPriority);
                 });
                 this.listenTo(this._dataSet, 'blurResource', function(e) {
-                    var viewPriority = 1;
+                    var viewPriority = e.priority;
                     this._closePopup(e, Mosaic.MapFocusedPopupView,
                             viewPriority);
                 })
@@ -1850,7 +1907,8 @@
                     }
                     view.triggerMethod(method, e);
                 }
-                _.each(Mosaic.ResourceStates, function(conf) {
+                var resourceStates = Mosaic.DataSet.getResourceStates();
+                _.each(resourceStates, function(conf) {
                     that.listenTo(that._dataSet, conf.on, function(e) {
                         handler(conf.on, e);
                     });
