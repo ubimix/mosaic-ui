@@ -1478,10 +1478,12 @@
                     popup.setContent(element[0]);
 
                     // Set the coordinates of the popup
-                    var lat = coords[1];
-                    var lng = coords[0];
-                    var latlng = L.latLng(lat, lng);
-                    popup.setLatLng(latlng);
+                    if (coords) {
+                        var lat = coords[1];
+                        var lng = coords[0];
+                        var latlng = L.latLng(lat, lng);
+                        popup.setLatLng(latlng);
+                    }
 
                     // Prepare the resulting deferred object
                     // It is used to close the popup
@@ -1543,9 +1545,9 @@
                         that._showPopup(e, Mosaic.MapActivePopupView,
                                 viewPriority);
                     };
-                    if (that._groupLayer.clusterLayer) {
-                        that._groupLayer.clusterLayer.zoomToShowLayer(layer,
-                                doShow);
+                    var clusterLayer = that._groupLayer.clusterLayer;
+                    if (clusterLayer && clusterLayer.hasLayer(layer)) {
+                        clusterLayer.zoomToShowLayer(layer, doShow);
                     } else {
                         doShow();
                     }
