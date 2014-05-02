@@ -1873,7 +1873,6 @@
                     var top = view.$el.position().top
                             + that._container.scrollTop()
                             - that._container.position().top;
-                    console.log('???? ', view, top)
                     that._view.$el.animate({
                         scrollTop : top
                     }, 300);
