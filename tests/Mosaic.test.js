@@ -103,5 +103,10 @@ describe("Mosaic.DataSet", function() {
             }));
             expect(priority).to.be.eql(expectedPriority);
         });
+        
+        it("should be able to notify about resource changes", function() {
+            
+        });
+
     });
 });
