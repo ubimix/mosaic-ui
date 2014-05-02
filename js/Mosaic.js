@@ -1514,7 +1514,8 @@
 
                 var geometry = resource.geometry || {};
                 var coords;
-                if (geometry.type == 'Point') {
+                var isPoint = (geometry.type == 'Point');
+                if (isPoint) {
                     coords = geometry.coordinates;
                 }
                 if (!coords) {
@@ -1535,11 +1536,13 @@
                     popup.setContent(element[0]);
 
                     // Set the coordinates of the popup
+                    var popupInitialized = false;
                     if (coords) {
                         var lat = coords[1];
                         var lng = coords[0];
                         var latlng = L.latLng(lat, lng);
                         popup.setLatLng(latlng);
+                        popupInitialized = true;
                     }
 
                     // Prepare the resulting deferred object
@@ -1555,11 +1558,13 @@
                     })
                     // Open the popup
                     setTimeout(function() {
-                        if (layer.bindPopup) {
+                        if (isPoint && layer.bindPopup) {
                             layer.bindPopup(popup);
                             layer.openPopup();
-                        } else {
+                        } else if (popupInitialized) {
                             popup.openOn(map);
+                        } else {
+                            deferred.resolve();
                         }
                     }, 1);
                     return deferred;
