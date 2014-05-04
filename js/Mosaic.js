@@ -1454,16 +1454,10 @@
          * adapters.
          */
         Mosaic.ViewAdapter = Mosaic.Class.extend({
-            stopListening : Mosaic.Mixins.stopListening,
-            listenTo : Mosaic.Mixins.listenTo,
-        });
 
-        /* ------------------------------------------------- */
-        /**
-         * A common superclass for all resource view adapters (visualizing
-         * resources on views).
-         */
-        Mosaic.ResourceViewAdapter = Mosaic.ViewAdapter.extend({
+            stopListening : Mosaic.Mixins.stopListening,
+
+            listenTo : Mosaic.Mixins.listenTo,
 
             initialize : function(options) {
                 this.options = options || {};
@@ -1605,7 +1599,7 @@
         /**
          * DataSetMapAdapter - an abstract superclass for MapView adapters
          */
-        Mosaic.DataSetMapAdapter = Mosaic.ResourceViewAdapter.extend({
+        Mosaic.DataSetMapAdapter = Mosaic.ViewAdapter.extend({
 
             /**
              * An internal method showing a popup with the rendered resource.
@@ -1979,7 +1973,7 @@
 
         /* ------------------------------------------------- */
         /** GeoJsonDataSet - ListView adapter */
-        Mosaic.GeoJsonListViewAdapter = Mosaic.ResourceViewAdapter.extend({
+        Mosaic.GeoJsonListViewAdapter = Mosaic.ViewAdapter.extend({
 
             /** Renders the specified dataset on the view (on the list). */
             renderView : function() {
@@ -2047,7 +2041,7 @@
         })
 
         /** GeoJsonDataSet - ExpandedView adapter */
-        Mosaic.GeoJsonExpandedViewAdapter = Mosaic.ResourceViewAdapter.extend({
+        Mosaic.GeoJsonExpandedViewAdapter = Mosaic.ViewAdapter.extend({
 
             /** Renders the specified dataset on the view (on the list). */
             renderView : function() {
@@ -2313,8 +2307,8 @@
                 var adapterManager = Mosaic.AdapterManager.getInstance();
                 adapterManager.registerAdapter(Mosaic.MapView,
                         Mosaic.DebugDataSet, Mosaic.ViewAdapter.extend({
-                            render : function(view, data) {
-                                var map = view.getMap();
+                            renderView : function() {
+                                var map = this._view.getMap();
                                 map.on('click', function(e) {
                                     console.log(map.getZoom(), '['
                                             + e.latlng.lng + ',' + e.latlng.lat
