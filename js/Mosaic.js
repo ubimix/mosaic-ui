@@ -275,6 +275,11 @@
             /** Sets options for this object. */
             setOptions : function(options) {
                 this.options = _.extend(this.options || {}, options);
+            },
+
+            /** Returns options of this object. */
+            getOptions : function() {
+                return this.options || {};
             }
 
         })
@@ -718,7 +723,6 @@
                         var remove = currentId == id;
                         return !remove;
                     });
-                    console.log(that._list)
                     that.fire('update', that);
                     return that._loadNewCursor(that._list);
                 })
@@ -985,7 +989,7 @@
             /** Removes all registered listeners and removes this view from DOM. */
             remove : function() {
                 this.stopListening();
-                var element = view.getElement();
+                var element = this.getElement();
                 element.remove();
                 return this;
             },
@@ -1441,12 +1445,44 @@
             }
         })
 
+        /**
+         * A static method used to extract MapView options from an HTML element.
+         * This method is automatically called by the Mosaic.AppConfigurator
+         * class to configure this type of views.
+         */
+        Mosaic.MapView.newOptions = function(app, mapElement) {
+            var options = app.getOptions();
+            var center = mapElement.data('center') || [ 0, 0 ];
+            var zoom = mapElement.data('zoom');
+            var minZoom = mapElement.data('min-zoom') || 2;
+            var maxZoom = mapElement.data('max-zoom') || 18;
+            var zoomControl = mapElement.data('zoom-control');
+            return _.extend({
+                app : app,
+                el : mapElement,
+                minZoom : minZoom,
+                maxZoom : maxZoom,
+                initialZoom : zoom,
+                initialCenter : center,
+            }, options.mapOptions);
+        }
+
         /* ------------------------------------------------- */
 
         /** List view. Used to visualize all resources in a side bar. */
         Mosaic.ListView = Mosaic.DataSetView.extend({
             type : 'ListView'
         })
+        /**
+         * A static method initializing options from the specified element.
+         */
+        Mosaic.ListView.newOptions = function(app, elm) {
+            var options = app.getOptions();
+            return _.extend({
+                app : app,
+                el : elm
+            }, options.listOptions);
+        };
 
         /* ------------------------------------------------- */
         /**
@@ -1521,16 +1557,30 @@
             /**
              * Resets the internal index of views.
              */
-            _addResourceViewToIndex : function(resource, view) {
+            _addResourceViewToIndex : function(view) {
+                if (!view || !view.getResource)
+                    return;
+                var resource = view.getResource();
                 var resourceId = this._dataSet.getResourceId(resource);
                 this._viewIndex[resourceId] = view;
             },
+
+            /** Removes the specified view from the internal index */
+            _removeResourceViewFromIndex : function(view) {
+                if (!view || !view.getResource)
+                    return;
+                var resource = view.getResource();
+                var resourceId = this._dataSet.getResourceId(resource);
+                delete this._viewIndex[resourceId];
+            },
+
             /**
              * Resets the internal index of views.
              */
             _resetViewIndex : function() {
                 this._viewIndex = {};
             },
+
             /** Returns a view corresponding to the specified resource */
             _getResourceView : function(resource) {
                 var resourceId = this._dataSet.getResourceId(resource);
@@ -1990,9 +2040,7 @@
                                 var view = that.newResourceView(
                                         Mosaic.ListItemView, resource);
                                 if (view) {
-                                    that
-                                            ._addResourceViewToIndex(resource,
-                                                    view);
+                                    that._addResourceViewToIndex(view);
                                     that._container.append(view.getElement());
                                     view.render();
                                 }
@@ -2203,8 +2251,6 @@
                 this.options = options || {};
                 this.app = new Mosaic.App();
                 this._initTemplates();
-                this._initMapOptions();
-                this._initListOptions();
                 this._initDataSets();
                 this._initDebug();
                 this._initViews();
@@ -2242,39 +2288,7 @@
                 var templateHtml = '<div>' + templateElm.html() + '</div>';
                 Mosaic.registerViewAdapters(templateHtml);
             },
-            /**
-             * Initializes all map options from the element referenced by the
-             * "mapSelector" application parameter.
-             */
-            _initMapOptions : function() {
-                var options = this.getOptions();
-                var mapElement = $(options.mapSelector);
-                var center = mapElement.data('center') || [ 0, 0 ];
-                var zoom = mapElement.data('zoom');
-                var minZoom = mapElement.data('min-zoom') || 2;
-                var maxZoom = mapElement.data('max-zoom') || 18;
-                var zoomControl = mapElement.data('zoom-control');
-                this.mapOptions = _.extend({
-                    app : this.app,
-                    el : mapElement,
-                    minZoom : minZoom,
-                    maxZoom : maxZoom,
-                    initialZoom : zoom,
-                    initialCenter : center,
-                }, options.mapOptions);
-            },
-            /**
-             * Initializes list options from the element referenced by the
-             * "listSelector" application parameter.
-             */
-            _initListOptions : function() {
-                var options = this.getOptions();
-                var listElement = $(options.listSelector);
-                this.listOptions = _.extend({
-                    app : this.app,
-                    el : listElement
-                }, options.listOptions);
-            },
+
             /**
              * Loads and initializes all datasets defined in the HTML element
              * referenced by the "datalayersSelector" application parameter.
@@ -2320,8 +2334,57 @@
             },
             /** Initializes all views of this application */
             _initViews : function() {
-                this.mapPanel = new Mosaic.MapView(this.mapOptions);
-                this.listPanel = new Mosaic.ListView(this.listOptions);
+                var that = this;
+                that._views = [];
+                function addView(el, type) {
+                    var id = el.attr('id');
+                    if (!id) {
+                        id = _.uniqueId('view-id-');
+                        el.attr('id', id);
+                    }
+                    if (_.has(that._views, id))
+                        return;
+                    var TypeName = _.isFunction(type) ? type(el) : type;
+                    var ViewType = Mosaic[TypeName];
+                    if (!ViewType) {
+                        ViewType = Mosaic[TypeName] = Mosaic.DataSetView
+                                .extend({
+                                    type : TypeName
+                                });
+                    }
+                    var options;
+                    if (_.isFunction(ViewType.newOptions)) {
+                        options = ViewType.newOptions(that.app, el);
+                    }
+                    options = options || {};
+                    options = _.extend(options, {
+                        app : that.app,
+                        el : el
+                    })
+                    var view = new ViewType(options)
+                    that._views[id] = view;
+                }
+                var options = that.getOptions();
+                _.each([ {
+                    selector : options.mapSelector,
+                    type : function() {
+                        return 'MapView';
+                    }
+                }, {
+                    selector : options.listSelector,
+                    type : function(elm) {
+                        return 'ListView';
+                    }
+                }, {
+                    selector : options.viewsSelector || '[data-panel]',
+                    type : function(elm) {
+                        return elm.attr('data-panel');
+                    }
+                } ], function(o) {
+                    $(o.selector).each(function() {
+                        addView($(this), o.type);
+                    });
+                });
             },
 
             /** Extracts common dataset options from the specified element */
@@ -2335,8 +2398,10 @@
                 var options = {
                     forceReload : forceReload,
                     attribution : attributionElm.html(),
-                    minZoom : elm.data('min-zoom') || that.mapOptions.minZoom,
-                    maxZoom : elm.data('max-zoom') || that.mapOptions.maxZoom,
+                    minZoom : elm.data('min-zoom'),
+                    // || that.mapOptions.minZoom,
+                    maxZoom : elm.data('max-zoom'),
+                    // || that.mapOptions.maxZoom,
                     zIndex : that.zIndex++,
                     visible : !!visible
                 }
