@@ -2132,16 +2132,40 @@
         /** Adapters of tilesets to the MapView */
         Mosaic.TileSetMapViewAdapter = Mosaic.DataSetMapAdapter.extend({
 
+            _bindDataEventListeners : function() {
+                var proto = Mosaic.DataSetMapAdapter.prototype;
+                proto._bindDataEventListeners.apply(this, arguments);
+                this.listenTo(this._dataSet, 'hide', function(e) {
+                    if (this._tilesLayer && e.hideTiles) {
+                        this._groupLayer.removeLayer(this._tilesLayer);
+                    }
+                    if (this._gridLayer && e.hideGrid) {
+                        this._groupLayer.removeLayer(this._gridLayer);
+                    }
+                });
+                this.listenTo(this._dataSet, 'show', function(e) {
+                    if (this._tilesLayer && e.showTiles) {
+                        this._groupLayer.addLayer(this._tilesLayer);
+                    }
+                    if (this._gridLayer && e.showGrid) {
+                        this._groupLayer.addLayer(this._gridLayer);
+                    }
+                });
+            },
+
             _doRender : function(groupLayer) {
                 this._tilesLayer = undefined;
                 this._gridLayer = undefined;
                 var maxZoom = this._view.getMaxZoom();
                 var attribution = this._dataSet.getAttribution();
                 var tilesUrl = this._dataSet.getTilesUrl();
+                var options = this._dataSet.getOptions();
+                var zIndex = options.zIndex || 1;
                 if (tilesUrl) {
                     var layer = this._tilesLayer = L.tileLayer(tilesUrl, {
                         attribution : attribution,
-                        maxZoom : maxZoom
+                        maxZoom : maxZoom,
+                        zIndex : zIndex
                     });
                     groupLayer.addLayer(layer);
                 }
@@ -2166,6 +2190,7 @@
                     });
                     groupLayer.addLayer(layer);
                 }
+                this._bindDataEventListeners();
             },
 
             _getResourceLayer : function(resource) {
