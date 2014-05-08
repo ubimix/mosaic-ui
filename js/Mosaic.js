@@ -374,7 +374,17 @@
                 var result = null;
                 if (_.isFunction(AdapterType)) {
                     options = options || {};
-                    result = new AdapterType(options);
+                    if (this._checkValidity(AdapterType, options)) {
+                        if (_.isFunction(AdapterType.initialize)) {
+                            AdapterType.initialize(options);
+                        }
+                        result = new AdapterType(options);
+                        if (!this._checkValidity(result, options)) {
+                            result = null;
+                        }
+                    }
+                } else {
+                    result = AdapterType;
                 }
                 return result;
             },
@@ -383,6 +393,17 @@
                 var key = this._getKey(from, to);
                 var result = this._adapters[key];
                 delete this._adapters[key];
+                return result;
+            },
+
+            /**
+             * Checks if option values are valid using validation methods on the
+             * specified object
+             */
+            _checkValidity : function(obj, options) {
+                if (!_.isFunction(obj.isValid))
+                    return true;
+                var result = obj.isValid(options);
                 return result;
             }
         });
@@ -480,17 +501,23 @@
              * no adapters were found for the resource type then this method
              * tries to get an adapter for parent types.
              */
-            getResourceAdapter : function(resource, adapterType) {
+            getResourceAdapter : function(resource, adapterType, options) {
                 var adapters = Mosaic.AdapterManager.getInstance();
                 var adapter = null;
+                options = options || {};
+                options.resource = resource;
                 var resourceType = this.getResourceType(resource);
-                while (adapter == null & resourceType != null) {
-                    adapter = adapters.getAdapter(resourceType, adapterType);
+                while (resourceType != null) {
+                    adapter = adapters.newAdapterInstance(resourceType,
+                            adapterType, options);
+                    if (adapter)
+                        break;
                     var parentType = this.getParentResourceType(resourceType);
                     resourceType = parentType;
                 }
                 if (!adapter) {
-                    adapter = adapters.getAdapter('Default', adapterType);
+                    adapter = adapters.newAdapterInstance('Default',
+                            adapterType, options);
                 }
                 return adapter;
             },
@@ -826,10 +853,14 @@
 
             /** Removes the specified dataset. */
             removeDataSet : function(dataSet) {
-                this._triggerDataSetEvent('dataSet:remove', dataSet);
-                this.stopListening(dataSet, 'update');
+                if (!dataSet)
+                    return;
                 var id = dataSet.getId();
-                delete this._dataSets[id];
+                if (_.has(this._dataSets, id)) {
+                    this._triggerDataSetEvent('dataSet:remove', dataSet);
+                    this.stopListening(dataSet, 'update');
+                    delete this._dataSets[id];
+                }
             },
 
             /**
@@ -1508,25 +1539,11 @@
              * the specified resource and a ViewType.
              */
             newResourceView : function(Type, resource) {
-                var result = null;
-                var that = this;
-                var View = that._dataSet.getResourceAdapter(resource, Type);
-                if (View) {
-                    if (_.isFunction(View.initialize)) {
-                        View.initialize(resource);
-                    }
-                    if (!_.isFunction(View.isValid) || View.isValid(resource)) {
-                        result = new View({
-                            resource : resource,
-                            dataSet : this._dataSet,
-                            parentView : that._view
-                        });
-                        if (_.isFunction(result.isValid)
-                                && !result.isValid(result)) {
-                            result = null;
-                        }
-                    }
-                }
+                var result = this._dataSet.getResourceAdapter(resource, Type, {
+                    resource : resource,
+                    dataSet : this._dataSet,
+                    parentView : this._view
+                });
                 return result;
             },
 
@@ -2337,11 +2354,7 @@
                 var that = this;
                 that._views = [];
                 function addView(el, type) {
-                    var id = el.attr('id');
-                    if (!id) {
-                        id = _.uniqueId('view-id-');
-                        el.attr('id', id);
-                    }
+                    var id = that._getOrCreateId(el);
                     if (_.has(that._views, id))
                         return;
                     var TypeName = _.isFunction(type) ? type(el) : type;
@@ -2387,15 +2400,34 @@
                 });
             },
 
+            /**
+             * Returns an identifier of the specified element. If there is no
+             * identifier was defined then this method creates and ands a new
+             * one.
+             */
+            _getOrCreateId : function(el) {
+                var id = el.attr('id');
+                if (!id) {
+                    id = _.uniqueId('el-id-');
+                    el.attr('id', id);
+                }
+                return id;
+            },
+
             /** Extracts common dataset options from the specified element */
             _extractDataSetOptions : function(elm) {
                 var that = this;
+                var id = elm.data('map-layer');
+                if (!id) {
+                    id = that._getOrCreateId(elm);
+                }
                 var visible = elm.data('visible');
                 var forceReload = !!elm.data('force-reload');
                 if (!that.zIndex)
                     that.zIndex = 1;
                 var attributionElm = elm.find('.attribution');
                 var options = {
+                    id : id,
                     forceReload : forceReload,
                     attribution : attributionElm.html(),
                     minZoom : elm.data('min-zoom'),
