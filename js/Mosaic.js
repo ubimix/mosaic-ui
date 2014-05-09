@@ -1456,7 +1456,9 @@
                 var element = this.getElement();
                 var map = this._map = L.map(element[0], mapOptions);
                 _.each(controls, function(control) {
-                    map.addControl(control);
+                    if (control && _.isObject(control)) {
+                        map.addControl(control);
+                    }
                 })
                 function _updateZoomClassNames() {
                     var zoom = map.getZoom();
@@ -1488,6 +1490,10 @@
             var minZoom = mapElement.data('min-zoom') || 2;
             var maxZoom = mapElement.data('max-zoom') || 18;
             var zoomControl = mapElement.data('zoom-control');
+            var mapOptions = {};
+            if (zoomControl !== undefined) {
+                mapOptions.zoomControl = zoomControl;
+            }
             return _.extend({
                 app : app,
                 el : mapElement,
@@ -1495,6 +1501,7 @@
                 maxZoom : maxZoom,
                 initialZoom : zoom,
                 initialCenter : center,
+                mapOptions : mapOptions
             }, options.mapOptions);
         }
 
