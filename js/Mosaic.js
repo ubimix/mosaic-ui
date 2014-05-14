@@ -1492,8 +1492,12 @@
             var zoomControl = mapElement.data('zoom-control');
             var mapOptions = {};
             if (zoomControl !== undefined) {
-                mapOptions.zoomControl = zoomControl;
-            }
+                if (zoomControl !== false) {
+                    mapOptions.zoomControl = L.control.zoom({
+                        position : zoomControl
+                    });
+                }
+            }            
             return _.extend({
                 app : app,
                 el : mapElement,
