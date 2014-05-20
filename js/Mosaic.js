@@ -2547,6 +2547,65 @@
 
         })
 
+        /**
+         * Adds a new view for a resource.
+         * 
+         * @param options.dataSetType
+         *            type of the configured dataset (ex: Mosaic.TilesDataSet)
+         * @param options.viewType
+         *            type of the configured dataset (ex: 'MobileDetailsView')
+         * @param options.event
+         *            type of the event activating this view (ex:
+         *            'focusResource')
+         * @param options.dataSets
+         *            key of the data set associated with this visualization
+         *            (ex: 'myResources')
+         */
+        Mosaic.AppConfigurator.addResourceView = function(options) {
+            var adapters = Mosaic.AdapterManager.getInstance();
+            var AdapterType = Mosaic.ViewAdapter.extend({
+                _handleEvent : function(e) {
+                    var that = this;
+                    if (that._resourceView) {
+                        that._resourceView.remove();
+                        that._removeResourceViewFromIndex(e.resource,
+                                that._resourceView);
+                        delete that._resourceView;
+                    }
+                    that._resourceView = that.newResourceView(options.viewType,
+                            e.resource);
+                    if (that._resourceView) {
+                        that._addResourceViewToIndex(e.resource,
+                                that._resourceView);
+                        var parentView = that._view;
+                        parentView.getElement().html(
+                                that._resourceView.getElement());
+                        that._resourceView.render();
+                    }
+                },
+                renderView : function() {
+                    this.listenTo(this._dataSet, options.event,
+                            this._handleEvent);
+                }
+
+            });
+            function toArray(o) {
+                if (!o)
+                    return [];
+                if (_.isString(o))
+                    return [ o ];
+                return _.toArray(o);
+            }
+            AdapterType.isValid = function(opt) {
+                var dataSets = toArray(options.dataSets);
+                var result = dataSets.length == 0
+                        || _.contains(dataSets, opt.dataSet.getId());
+                return result;
+            };
+            adapters.registerAdapter(options.viewType, options.dataSetType,
+                    AdapterType);
+        }
+
         /* ------------------------------------------------- */
 
         /** Default adapters registration */
