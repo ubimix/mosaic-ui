@@ -579,13 +579,52 @@
                 return false;
             },
 
-            /** Create and returns an event for the specified resource */
+            /** Create and returns an event for the specified object */
             newEvent : function(event) {
                 return _.extend({
                     priority : 0,
                     dataSet : this
                 }, event);
-            }
+            },
+
+            /**
+             * This method should be overloaded in subclasses and it has to
+             * launch a real search operation and return a promise for search
+             * results.
+             */
+            _doSearch : function(params) {
+                return Mosaic.Promise(true);
+            },
+
+            /** Returns the currently active search parameters */
+            getSearchParams : function() {
+                return this._searchParams || {};
+            },
+
+            /**
+             * Sets a new search parameters. This method starts a search
+             * operation by calling the "_doSearch" method and notifies about
+             * the beginning and the end of the search operations.
+             */
+            search : function(params) {
+                var that = this;
+                that._searchParams = params;
+                params = this.getSearchParams();
+                return Mosaic.Promise().then(function() {
+                    that.fire('search:begin', that.newEvent({
+                        params : params
+                    }));
+                    return that._doSearch(params);
+                }).then(function(result) {
+                    that.fire('search:end', that.newEvent({
+                        params : params
+                    }));
+                    if (result) {
+                        that.fire('update', that.newEvent({}));
+                    }
+                    return result;
+                });
+            },
         });
 
         /* Static methods associated with the Mosaic.DataSet class. */
@@ -608,10 +647,12 @@
                 this._resourceStates = this._resourceStates || [];
                 this._resourceStates = this._resourceStates.concat(states);
             },
+
             /** This method returns all possible resource states. */
             getResourceStates : function() {
                 return this._resourceStates || [];
-            }
+            },
+
         });
 
         /** Registeres a list of resource events */
@@ -699,6 +740,7 @@
                 return that._loadPromise;
             },
 
+            /** Returns underlying resources as a list */
             _getList : function() {
                 var that = this;
                 if (that._list) {
@@ -750,7 +792,7 @@
                         var remove = currentId == id;
                         return !remove;
                     });
-                    that.fire('update', that);
+                    that.fire('update', that.newEvent({}));
                     return that._loadNewCursor(that._list);
                 })
             }
@@ -765,12 +807,73 @@
          */
         Mosaic.TilesDataSet = Mosaic.DataSet.extend({
             type : 'TilesDataSet',
+
+            /** Updates tiles URLs */
+            _doSearch : function(params) {
+                var that = this;
+                return Mosaic.Promise().then(function() {
+                    delete that._tilesUrl;
+                    delete that._datagridUrl;
+                    return true;
+                });
+            },
+
+            /** Formats the specified URL by adding search parameters. */
+            _formatUrl : function(url) {
+                if (!url) {
+                    return url;
+                }
+                function formatKey(s) {
+                    s = String(s);
+                    return encodeURIComponent(s);
+                }
+                function formatValue(s) {
+                    if (_.isArray(s)) {
+                        return _.map(s, formatValue).join(',');
+                    }
+                    s = String(s);
+                    s = encodeURIComponent(s);
+                    return s;
+                }
+                var str = '';
+                var params = this.getSearchParams();
+                console.log('SEARCH PARAMS: ', JSON.stringify(params))
+                _.each(params, function(value, key) {
+                    if (str.length > 0) {
+                        str += '&';
+                    }
+                    str += formatKey(key) + '=' + formatValue(value);
+                }, this);
+                if (str.length > 0) {
+                    var idx = url.indexOf('?');
+                    if (idx < 0) {
+                        url += '?';
+                    } else {
+                        url += '&';
+                    }
+                    url += str;
+                }
+                return url;
+            },
+
+            /** Returns tile URL containing search parameters. */
             getTilesUrl : function() {
-                return this.options.tilesUrl;
+                if (!this._tilesUrl) {
+                    this._tilesUrl = this._formatUrl(this.options.tilesUrl);
+                }
+                return this._tilesUrl;
             },
+
+            /** Returns UTFGrid URL containing search parameters. */
             getDataGridUrl : function() {
-                return this.options.datagridUrl;
+                if (!this._datagridUrl) {
+                    this._datagridUrl = this
+                            ._formatUrl(this.options.datagridUrl);
+                }
+                return this._datagridUrl;
             },
+
+            /** Returns tile layer attribution to show on the map. */
             getAttribution : function() {
                 return this.options.attribution;
             }
@@ -836,6 +939,13 @@
              */
             getDataSet : function(id) {
                 return this._dataSets[id];
+            },
+
+            /**
+             * Returns a list of all datasets
+             */
+            getDataSets : function() {
+                return _.values(this._dataSets);
             },
 
             /** Adds a new data set to this application */
@@ -1497,7 +1607,7 @@
                         position : zoomControl
                     });
                 }
-            }            
+            }
             return _.extend({
                 app : app,
                 el : mapElement,
@@ -1861,6 +1971,16 @@
             },
 
             /**
+             * This internal method unbinds/removes event listeners from the
+             * specified map layer.
+             */
+            _unbindLayerEventListeners : function(layer, resourceProvider) {
+                layer.off('mouseover');
+                layer.off('mouseout');
+                layer.off('click');
+            },
+
+            /**
              * Returns options value corresponding to the specified key of the
              * internal dataset
              */
@@ -1881,7 +2001,7 @@
                 var that = this;
                 that.resetView();
                 this._groupLayer = new L.FeatureGroup();
-                this._doRender(this._groupLayer);
+                this._doRender();
                 var map = this._view.getMap();
                 map.addLayer(this._groupLayer);
                 that._bindDataEventListeners();
@@ -1900,9 +2020,13 @@
 
             /* Methods to overload in subclasses */
 
-            /** Returns a layer corresponding to the specified resource */
-            _getResourceLayer : function(e) {
-                throw new Error('Not implemented');
+            /**
+             * Should return a layer corresponding to the specified resource (to
+             * show it in the dynamic client-side cluster). This method returns
+             * null.
+             */
+            _getResourceLayer : function(resource) {
+                return undefined;
             }
         });
 
@@ -1934,7 +2058,7 @@
                     },
 
                     /** Visualizes all data associated with this data set */
-                    _doRender : function(groupLayer) {
+                    _doRender : function() {
                         var that = this;
                         this._index = {};
                         var clusterLayer = null;
@@ -1951,8 +2075,8 @@
                                     clusterOptions);
                         }
                         if (clusterLayer) {
-                            groupLayer.addLayer(clusterLayer);
-                            groupLayer.clusterLayer = clusterLayer;
+                            that._groupLayer.addLayer(clusterLayer);
+                            that._groupLayer.clusterLayer = clusterLayer;
                         }
                         var that = this;
                         this._dataSet.loadResources({}).then(
@@ -1960,7 +2084,7 @@
                                     var resources = cursor.getList();
                                     _.each(resources, function(resource) {
                                         that._renderResourceFigure(resource,
-                                                groupLayer);
+                                                that._groupLayer);
                                     }, that);
                                 })
                     },
@@ -2143,6 +2267,10 @@
         /** Adapters of tilesets to the MapView */
         Mosaic.TileSetMapViewAdapter = Mosaic.DataSetMapAdapter.extend({
 
+            /**
+             * Binds listeners to the underlying data set to reflect data
+             * changes on the map.
+             */
             _bindDataEventListeners : function() {
                 var proto = Mosaic.DataSetMapAdapter.prototype;
                 proto._bindDataEventListeners.apply(this, arguments);
@@ -2162,51 +2290,101 @@
                         this._groupLayer.addLayer(this._gridLayer);
                     }
                 });
+                this.listenTo(this._dataSet, 'update', this._onUpdate);
             },
 
-            _doRender : function(groupLayer) {
-                this._tilesLayer = undefined;
-                this._gridLayer = undefined;
-                var maxZoom = this._view.getMaxZoom();
-                var attribution = this._dataSet.getAttribution();
-                var tilesUrl = this._dataSet.getTilesUrl();
+            /**
+             * This method is used to re-draw map tiles when the underlying data
+             * set changes.
+             */
+            _onUpdate : function(e) {
+                if (!this._groupLayer)
+                    return;
+                this._removeTilesLayer();
+                this._removeGridLayer();
+                this._addTilesLayer();
+                this._addGridLayer();
+            },
+
+            /** Returns z-index for these layers */
+            _getZIndex : function() {
                 var options = this._dataSet.getOptions();
                 var zIndex = options.zIndex || 1;
-                if (tilesUrl) {
-                    var layer = this._tilesLayer = L.tileLayer(tilesUrl, {
-                        attribution : attribution,
-                        maxZoom : maxZoom,
-                        zIndex : zIndex
-                    });
-                    groupLayer.addLayer(layer);
-                }
-
-                var utfgridUrl = this._dataSet.getDataGridUrl();
-                if (utfgridUrl) {
-                    var layer = this._gridLayer = new L.UtfGrid(utfgridUrl);
-                    this._bindLayerEventListeners(layer, function(e) {
-                        var data = e.data;
-                        if (!data)
-                            return null;
-                        if (_.isString(data.properties)) {
-                            data.properties = JSON.parse(data.properties);
-                            if (!data.properties.type) {
-                                data.properties.type = data.type;
-                            }
-                        }
-                        if (_.isString(data.geometry)) {
-                            data.geometry = JSON.parse(data.geometry);
-                        }
-                        return data;
-                    });
-                    groupLayer.addLayer(layer);
-                }
-                this._bindDataEventListeners();
+                return zIndex;
             },
 
-            _getResourceLayer : function(resource) {
-                return this._gridLayer;
-            }
+            /** Removes already existing tiles layer. */
+            _removeTilesLayer : function() {
+                if (this._tilesLayer) {
+                    this._groupLayer.removeLayer(this._tilesLayer);
+                    delete this._tilesLayer;
+                }
+            },
+
+            /**
+             * An internal method creating a new tiles layer.
+             */
+            _addTilesLayer : function() {
+                var tilesUrl = this._dataSet.getTilesUrl();
+                if (!tilesUrl)
+                    return;
+                var attribution = this._dataSet.getAttribution();
+                var zIndex = this._getZIndex();
+                var maxZoom = this._view.getMaxZoom();
+                var layer = L.tileLayer(tilesUrl, {
+                    attribution : attribution,
+                    maxZoom : maxZoom,
+                    zIndex : zIndex
+                });
+                this._groupLayer.addLayer(layer);
+                this._tilesLayer = layer;
+            },
+
+            /** Removes an already existing UTFGrid layer. */
+            _removeGridLayer : function() {
+                if (this._gridLayer) {
+                    this._unbindLayerEventListeners(this._gridLayer);
+                    this._groupLayer.removeLayer(this._gridLayer);
+                    delete this._gridLayer;
+                }
+            },
+
+            /** Creates and adds a new grid layer. */
+            _addGridLayer : function() {
+                var utfgridUrl = this._dataSet.getDataGridUrl();
+                if (!utfgridUrl)
+                    return;
+                var layer = new L.UtfGrid(utfgridUrl);
+                this._bindLayerEventListeners(layer, function(e) {
+                    var data = e.data;
+                    if (!data)
+                        return null;
+                    if (_.isString(data.properties)) {
+                        // FIXME: refactor it!
+                        data.properties = JSON.parse(data.properties);
+                        if (!data.properties.type) {
+                            data.properties.type = data.type;
+                        }
+                    }
+                    if (_.isString(data.geometry)) {
+                        data.geometry = JSON.parse(data.geometry);
+                    }
+                    return data;
+                });
+                this._groupLayer.addLayer(layer);
+                this._gridLayer = layer;
+            },
+
+            /** Visualizes all data associated with this data set */
+            _doRender : function() {
+                this._removeTilesLayer();
+                this._removeGridLayer();
+                this._addTilesLayer();
+                this._addGridLayer();
+                this._bindDataEventListeners();
+                this._rendered = true;
+            },
+
         })
 
         /* ------------------------------------------------- */
