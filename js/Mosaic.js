@@ -2336,8 +2336,6 @@
             /** Show/hides tiles layer. */
             _setTilesLayerVisibility : function(visible) {
                 this._tilesLayerVisible = !!visible;
-                console.log('_setTilesLayerVisibility', this._dataSet.getId(),
-                        this._tilesLayerVisible, new Error().stack);
                 if (this._tilesLayer && this._groupLayer) {
                     if (this._tilesLayerVisible) {
                         this._groupLayer.addLayer(this._tilesLayer);
