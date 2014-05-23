@@ -837,7 +837,6 @@
                 }
                 var str = '';
                 var params = this.getSearchParams();
-                console.log('SEARCH PARAMS: ', JSON.stringify(params))
                 _.each(params, function(value, key) {
                     if (str.length > 0) {
                         str += '&';
@@ -1349,8 +1348,8 @@
              * This method is invoked when a dataset is changed.
              */
             onDataSetUpdate : function(e) {
-                this.onDataSetRemove(e);
-                this.onDataSetAdd(e);
+                // this.onDataSetRemove(e);
+                // this.onDataSetAdd(e);
                 // var dataSet = e.dataSet;
                 // var adapter = this.getEntity(dataSet.getId());
                 // if (adapter && adapter.render) {
@@ -1603,9 +1602,13 @@
             var mapOptions = {};
             if (zoomControl !== undefined) {
                 if (zoomControl !== false) {
+                    var position = _.isString(zoomControl) ? zoomControl
+                            : 'topleft';
                     mapOptions.zoomControl = L.control.zoom({
-                        position : zoomControl
+                        position : position
                     });
+                } else {
+                    mapOptions.zoomControl = null;
                 }
             }
             return _.extend({
@@ -1902,6 +1905,9 @@
              * resources in popups.
              */
             _bindDataEventListeners : function() {
+                this.listenTo(this._dataSet, 'update', function(e) {
+                    this._doRender();
+                });
                 this.listenTo(this._dataSet, 'activateResource', function(e) {
                     var that = this;
                     var resource = that._dataSet.getResourceFromEvent(e);
@@ -2057,9 +2063,25 @@
                                 || !geom.coordinates[0] || !geom.coordinates[1]);
                     },
 
+                    /** Cleans up already existing widgets */
+                    _clearView : function() {
+                        var that = this;
+                        var groupLayer = that._groupLayer;
+                        _.each(this._index, function(layer, resourceId) {
+                            groupLayer.removeLayer(layer);
+                        })
+                        if (groupLayer.clusterLayer) {
+                            groupLayer.removeLayer(groupLayer.clusterLayer);
+                            delete groupLayer.clusterLayer;
+                        }
+                        delete that._index;
+                    },
+
                     /** Visualizes all data associated with this data set */
                     _doRender : function() {
                         var that = this;
+                        this._clearView();
+
                         this._index = {};
                         var clusterLayer = null;
                         var makeCluster = that._getDatasetOptions(
@@ -2267,6 +2289,14 @@
         /** Adapters of tilesets to the MapView */
         Mosaic.TileSetMapViewAdapter = Mosaic.DataSetMapAdapter.extend({
 
+            /** Initializes this object. */
+            initialize : function(options) {
+                var proto = Mosaic.DataSetMapAdapter.prototype;
+                proto.initialize.apply(this, arguments);
+                this._setTilesLayerVisibility(true);
+                this._setGridLayerVisibility(true);
+            },
+
             /**
              * Binds listeners to the underlying data set to reflect data
              * changes on the map.
@@ -2275,22 +2305,58 @@
                 var proto = Mosaic.DataSetMapAdapter.prototype;
                 proto._bindDataEventListeners.apply(this, arguments);
                 this.listenTo(this._dataSet, 'hide', function(e) {
-                    if (this._tilesLayer && e.hideTiles) {
-                        this._groupLayer.removeLayer(this._tilesLayer);
+                    if (e.hideTiles) {
+                        this._setTilesLayerVisibility(false);
                     }
-                    if (this._gridLayer && e.hideGrid) {
-                        this._groupLayer.removeLayer(this._gridLayer);
+                    if (e.hideGrid) {
+                        this._setGridLayerVisibility(false);
                     }
                 });
                 this.listenTo(this._dataSet, 'show', function(e) {
-                    if (this._tilesLayer && e.showTiles) {
-                        this._groupLayer.addLayer(this._tilesLayer);
+                    if (e.showTiles) {
+                        this._setTilesLayerVisibility(true);
                     }
-                    if (this._gridLayer && e.showGrid) {
-                        this._groupLayer.addLayer(this._gridLayer);
+                    if (e.showGrid) {
+                        this._setGridLayerVisibility(true);
                     }
                 });
                 this.listenTo(this._dataSet, 'update', this._onUpdate);
+            },
+
+            /** Returns the visibility status of the tiles layer. */
+            isTilesLayerVisible : function() {
+                return !!this._tilesLayerVisible;
+            },
+
+            /** Returns the visibility status of the tiles layer. */
+            isGridLayerVisible : function() {
+                return !!this._gridLayerVisible;
+            },
+
+            /** Show/hides tiles layer. */
+            _setTilesLayerVisibility : function(visible) {
+                this._tilesLayerVisible = !!visible;
+                console.log('_setTilesLayerVisibility', this._dataSet.getId(),
+                        this._tilesLayerVisible, new Error().stack);
+                if (this._tilesLayer && this._groupLayer) {
+                    if (this._tilesLayerVisible) {
+                        this._groupLayer.addLayer(this._tilesLayer);
+                    } else {
+                        this._groupLayer.removeLayer(this._tilesLayer);
+                    }
+                }
+            },
+
+            /** Show/hides tiles layer. */
+            _setGridLayerVisibility : function(visible) {
+                this._gridLayerVisible = !!visible;
+                if (this._gridLayer && this._groupLayer) {
+                    if (this._gridLayerVisible) {
+                        this._groupLayer.addLayer(this._gridLayer);
+                    } else {
+                        this._groupLayer.removeLayer(this._gridLayer);
+                    }
+                }
             },
 
             /**
@@ -2298,12 +2364,7 @@
              * set changes.
              */
             _onUpdate : function(e) {
-                if (!this._groupLayer)
-                    return;
-                this._removeTilesLayer();
-                this._removeGridLayer();
-                this._addTilesLayer();
-                this._addGridLayer();
+                this._refreshView();
             },
 
             /** Returns z-index for these layers */
@@ -2336,8 +2397,8 @@
                     maxZoom : maxZoom,
                     zIndex : zIndex
                 });
-                this._groupLayer.addLayer(layer);
                 this._tilesLayer = layer;
+                this._setTilesLayerVisibility(this.isTilesLayerVisible());
             },
 
             /** Removes an already existing UTFGrid layer. */
@@ -2371,8 +2432,14 @@
                     }
                     return data;
                 });
-                this._groupLayer.addLayer(layer);
                 this._gridLayer = layer;
+                this._setGridLayerVisibility(this.isGridLayerVisible());
+            },
+
+            /** Reloads the tiles and tiles layers. */
+            _refreshView : function() {
+                this._setGridLayerVisibility(this.isGridLayerVisible());
+                this._setTilesLayerVisibility(this.isTilesLayerVisible());
             },
 
             /** Visualizes all data associated with this data set */
@@ -2382,6 +2449,7 @@
                 this._addTilesLayer();
                 this._addGridLayer();
                 this._bindDataEventListeners();
+                this._refreshView();
                 this._rendered = true;
             },
 
@@ -2730,21 +2798,17 @@
         })
 
         /**
-         * Adds a new view for a resource.
+         * Creates and registers a new adapter of the a new view for a resource.
          * 
          * @param options.dataSetType
-         *            type of the configured dataset (ex: Mosaic.TilesDataSet)
+         *            type of dataset (ex: Mosaic.TilesDataSet)
          * @param options.viewType
-         *            type of the configured dataset (ex: 'MobileDetailsView')
+         *            type of the view (ex: 'MobileDetailsView')
          * @param options.event
          *            type of the event activating this view (ex:
          *            'focusResource')
-         * @param options.dataSets
-         *            key of the data set associated with this visualization
-         *            (ex: 'myResources')
          */
-        Mosaic.AppConfigurator.addResourceView = function(options) {
-            var adapters = Mosaic.AdapterManager.getInstance();
+        Mosaic.AppConfigurator.registerDataSetAdapter = function(options) {
             var AdapterType = Mosaic.ViewAdapter.extend({
                 _handleEvent : function(e) {
                     var that = this;
@@ -2769,8 +2833,30 @@
                     this.listenTo(this._dataSet, options.event,
                             this._handleEvent);
                 }
-
             });
+            var adapters = Mosaic.AdapterManager.getInstance();
+            adapters.registerAdapter(options.viewType, options.dataSetType,
+                    AdapterType);
+            return AdapterType;
+        }
+
+        /**
+         * Adds a new view for a resource.
+         * 
+         * @param options.dataSetType
+         *            type of the configured dataset (ex: Mosaic.TilesDataSet)
+         * @param options.viewType
+         *            type of the configured dataset (ex: 'MobileDetailsView')
+         * @param options.event
+         *            type of the event activating this view (ex:
+         *            'focusResource')
+         * @param options.dataSets
+         *            key of the data set associated with this visualization
+         *            (ex: 'myResources')
+         */
+        Mosaic.AppConfigurator.addResourceView = function(options) {
+            var AdapterType = Mosaic.AppConfigurator
+                    .registerDataSetAdapter(options);
             function toArray(o) {
                 if (!o)
                     return [];
@@ -2784,8 +2870,6 @@
                         || _.contains(dataSets, opt.dataSet.getId());
                 return result;
             };
-            adapters.registerAdapter(options.viewType, options.dataSetType,
-                    AdapterType);
         }
 
         /* ------------------------------------------------- */
