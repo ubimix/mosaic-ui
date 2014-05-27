@@ -546,6 +546,8 @@
             getResourceType : function(resource) {
                 if (!resource)
                     return null;
+                if (resource.type)
+                    return resource.type;
                 var properties = resource.properties || {};
                 var type = properties.type;
                 return type || 'Resource';
@@ -553,7 +555,10 @@
 
             /** Returns a parent for the specified type. */
             getParentResourceType : function(type) {
-                if (!type || type == '')
+                if (_.isFunction(type) || _.isObject(type)) {
+                    type = type.type;
+                }
+                if (!_.isString(type) || type == '')
                     return null;
                 var idx = type.lastIndexOf('/');
                 if (idx > 0)
@@ -1807,9 +1812,6 @@
                 // Exit if there is no layers corresponding to the
                 // specified resource
                 var layer = that._getResourceLayer(resource);
-                if (!layer) {
-                    return;
-                }
 
                 /* Creates a view for this resource */
                 var view = that.newResourceView(AdapterType, resource);
@@ -1868,7 +1870,7 @@
                     })
                     // Open the popup
                     setTimeout(function() {
-                        if (isPoint && layer.bindPopup) {
+                        if (isPoint && layer && layer.bindPopup) {
                             layer.bindPopup(popup);
                             layer.openPopup();
                         } else if (popupInitialized) {
@@ -1911,17 +1913,14 @@
                 this.listenTo(this._dataSet, 'activateResource', function(e) {
                     var that = this;
                     var resource = that._dataSet.getResourceFromEvent(e);
-                    var layer = that._getResourceLayer(resource);
-                    if (!layer) {
-                        return;
-                    }
                     var viewPriority = e.priority;
                     var doShow = function() {
                         that._showPopup(e, Mosaic.MapActivePopupView,
                                 viewPriority);
                     };
+                    var layer = that._getResourceLayer(resource);
                     var clusterLayer = that._groupLayer.clusterLayer;
-                    if (clusterLayer && clusterLayer.hasLayer(layer)) {
+                    if (layer && clusterLayer && clusterLayer.hasLayer(layer)) {
                         clusterLayer.zoomToShowLayer(layer, doShow);
                     } else {
                         doShow();
