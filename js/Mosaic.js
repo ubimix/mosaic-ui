@@ -1940,6 +1940,16 @@
                             viewPriority);
                 })
             },
+            /**
+             * This internal method unbinds/removes event listeners from the
+             * underlying data set.
+             */
+            _unbindDataEventListeners : function() {
+                this.stopListening(this._dataSet, 'update');
+                this.stopListening(this._dataSet, 'activateResource');
+                this.stopListening(this._dataSet, 'deactivateResource');
+                this.stopListening(this._dataSet, 'blurResource');
+            },
 
             /**
              * This internal method binds event listeners to map layers. These
@@ -2004,6 +2014,7 @@
             /** This method renders data on the view. */
             renderView : function() {
                 var that = this;
+                that._unbindDataEventListeners();
                 that.resetView();
                 this._groupLayer = new L.FeatureGroup();
                 this._doRender();
@@ -2205,6 +2216,7 @@
                 element.append(this._container);
 
                 var that = this;
+                that._unbindDataEventListeners();
                 that._resetViewIndex();
                 that._dataSet.loadResources({}).then(
                         function(cursor) {
@@ -2242,6 +2254,15 @@
                         scrollTop : top
                     }, 300);
                 });
+            },
+
+            /**
+             * This internal method unbinds/removes event listeners from the
+             * underlying data set.
+             */
+            _unbindDataEventListeners : function() {
+                var that = this;
+                that.stopListening(that._dataSet, 'activateResource');
             },
 
             /** Removes all rendered resources from the list. */
@@ -2320,6 +2341,18 @@
                     }
                 });
                 this.listenTo(this._dataSet, 'update', this._onUpdate);
+            },
+
+            /**
+             * This internal method unbinds/removes event listeners from the
+             * underlying data set.
+             */
+            _unbindDataEventListeners : function() {
+                var proto = Mosaic.DataSetMapAdapter.prototype;
+                proto._unbindDataEventListeners.apply(this, arguments);
+                this.stopListening(this._dataSet, 'hide');
+                this.stopListening(this._dataSet, 'show');
+                this.stopListening(this._dataSet, 'update');
             },
 
             /** Returns the visibility status of the tiles layer. */
@@ -2445,7 +2478,6 @@
                 this._removeGridLayer();
                 this._addTilesLayer();
                 this._addGridLayer();
-                this._bindDataEventListeners();
                 this._refreshView();
                 this._rendered = true;
             },
