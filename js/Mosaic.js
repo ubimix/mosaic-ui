@@ -936,6 +936,8 @@
         Mosaic.TilesDataSet = Mosaic.DataSet.extend({
             type : 'TilesDataSet',
 
+            _resourceIndex : {},
+
             /** Updates tiles URLs */
             _doSearch : function(params) {
                 var that = this;
@@ -1005,14 +1007,16 @@
                 return this.options.attribution;
             },
 
+            getLoadedResources : function() {
+                return _.values(this._resourceIndex);
+            },
+
             /**
              * This method is used by the map adapter to set a new set of
              * resources loaded by UTFGrid layers.
              */
             _setLoadedResources : function(index) {
                 var that = this;
-                if (!that._resourceIndex)
-                    that._resourceIndex = {};
                 var added = _.filter(index, function(resource, id) {
                     return !_.has(that._resourceIndex, id);
                 });
@@ -1020,19 +1024,11 @@
                         id) {
                     return !_.has(index, id);
                 });
-                if (added.length || removed.length) {
-                    var commons = _.filter(that._resourceIndex, function(
-                            resource, id) {
-                        return _.has(index, id);
-                    });
-                    var event = that.newEvent({
-                        existing : commons,
-                        added : added,
-                        removed : removed
-                    });
-                    that.fire('refresh', event);
-                }
                 that._resourceIndex = index;
+                if (added.length || removed.length) {
+                    var event = that.newEvent({});
+                    that.fire('update', event);
+                }
             }
 
         })
@@ -2061,47 +2057,42 @@
              * resources in popups.
              */
             _bindDataEventListeners : function() {
-                this.listenTo(this._dataSet, 'update', function(e) {
-                    this._doRender();
-                });
-                this.listenTo(this._dataSet, 'activateResource', function(e) {
-                    var that = this;
-                    var resource = that._dataSet.getResourceFromEvent(e);
-                    var viewPriority = e.priority;
-                    var doShow = function() {
-                        that._showPopup(e, Mosaic.MapActivePopupView,
-                                viewPriority);
-                    };
-                    var layer = that._getResourceLayer(resource);
-                    var clusterLayer = that._groupLayer.clusterLayer;
-                    if (layer && clusterLayer && clusterLayer.hasLayer(layer)) {
-                        clusterLayer.zoomToShowLayer(layer, doShow);
-                    } else {
-                        doShow();
-                    }
-                });
-                this.listenTo(this._dataSet, 'deactivateResource', function(e) {
-                })
-                this.listenTo(this._dataSet, 'focusResource', function(e) {
-                    var viewPriority = e.priority;
-                    this
-                            ._showPopup(e, Mosaic.MapFocusedPopupView,
-                                    viewPriority);
-                });
-                this.listenTo(this._dataSet, 'blurResource', function(e) {
-                    var viewPriority = e.priority;
-                    this._closePopup(e, Mosaic.MapFocusedPopupView,
-                            viewPriority);
-                })
+                // Dataset-related events
+                this.listenTo(this._dataSet, 'update', this._onUpdate);
+                this.listenTo(this._dataSet, 'refresh', this._onRefresh);
+                this.listenTo(this._dataSet, 'hide', this._onShow);
+                this.listenTo(this._dataSet, 'show', this._onHide);
+                this.listenTo(this._dataSet, 'search:begin', //
+                this._onBeginSearch);
+                this.listenTo(this._dataSet, 'search:end', //
+                this._onEndSearch);
+                // Resource-related events
+                this.listenTo(this._dataSet, 'activateResource',
+                        this._onActivateResource);
+                this.listenTo(this._dataSet, 'deactivateResource',
+                        this._onDeactivateResource)
+                this.listenTo(this._dataSet, 'focusResource',
+                        this._onFocusResource);
+                this.listenTo(this._dataSet, 'blurResource',
+                        this._onBlurResource);
             },
             /**
              * This internal method unbinds/removes event listeners from the
              * underlying data set.
              */
             _unbindDataEventListeners : function() {
+                // Dataset-related events
                 this.stopListening(this._dataSet, 'update');
+                this.stopListening(this._dataSet, 'refresh');
+                this.stopListening(this._dataSet, 'hide');
+                this.stopListening(this._dataSet, 'show');
+                this.stopListening(this._dataSet, 'search:begin');
+                this.stopListening(this._dataSet, 'search:end');
+
+                // Resource-related events
                 this.stopListening(this._dataSet, 'activateResource');
                 this.stopListening(this._dataSet, 'deactivateResource');
+                this.stopListening(this._dataSet, 'focusResource');
                 this.stopListening(this._dataSet, 'blurResource');
             },
 
@@ -2197,154 +2188,191 @@
              */
             _getResourceLayer : function(resource) {
                 return undefined;
+            },
+
+            /* -------------------------- */
+            /* Individual event listeners */
+
+            _onUpdate : function(e) {
+                this._doRender();
+            },
+            _onRefresh : function(e) {
+            },
+            _onShow : function(e) {
+            },
+            _onHide : function(e) {
+            },
+            _onBeginSearch : function(e) {
+            },
+            _onEndSearch : function(e) {
+                this._doRender();
+            },
+            _onActivateResource : function(e) {
+                var that = this;
+                var resource = that._dataSet.getResourceFromEvent(e);
+                var viewPriority = e.priority;
+                var doShow = function() {
+                    that._showPopup(e, Mosaic.MapActivePopupView, //
+                    viewPriority);
+                };
+                var layer = that._getResourceLayer(resource);
+                var clusterLayer = that._groupLayer.clusterLayer;
+                if (layer && clusterLayer && clusterLayer.hasLayer(layer)) {
+                    clusterLayer.zoomToShowLayer(layer, doShow);
+                } else {
+                    doShow();
+                }
+            },
+            _onDeactivateResource : function(e) {
+            },
+            _onFocusResource : function(e) {
+                var viewPriority = e.priority;
+                this._showPopup(e, Mosaic.MapFocusedPopupView, viewPriority);
+            },
+            _onBlurResource : function(e) {
+                var viewPriority = e.priority;
+                this._closePopup(e, Mosaic.MapFocusedPopupView, viewPriority);
             }
+
         });
 
         /* ------------------------------------------------- */
 
         /** GeoJsonDataSet - MapView adapter */
-        Mosaic.GeoJsonMapViewAdapter = Mosaic.DataSetMapAdapter
-                .extend({
+        Mosaic.GeoJsonMapViewAdapter = Mosaic.DataSetMapAdapter.extend({
 
-                    /**
-                     * Initializes this data set adapter. It creates an internal
-                     * index of Leaflet layers used to easy retrieve layeres by
-                     * resource identifiers.
-                     */
-                    initialize : function() {
-                        var parent = Mosaic.DataSetMapAdapter.prototype;
-                        parent.initialize.apply(this, arguments);
-                        this._index = {};
-                    },
+            /**
+             * Initializes this data set adapter. It creates an internal index
+             * of Leaflet layers used to easy retrieve layeres by resource
+             * identifiers.
+             */
+            initialize : function() {
+                var parent = Mosaic.DataSetMapAdapter.prototype;
+                parent.initialize.apply(this, arguments);
+                this._index = {};
+            },
 
-                    /**
-                     * Returns <code>true</code> if the specified geometry is
-                     * empty.
-                     */
-                    _isEmptyGeometry : function(geom) {
-                        return (!geom || !geom.coordinates
-                                || !geom.coordinates.length
-                                || !geom.coordinates[0] || !geom.coordinates[1]);
-                    },
+            /**
+             * Returns <code>true</code> if the specified geometry is empty.
+             */
+            _isEmptyGeometry : function(geom) {
+                return (!geom || !geom.coordinates || !geom.coordinates.length
+                        || !geom.coordinates[0] || !geom.coordinates[1]);
+            },
 
-                    /** Cleans up already existing widgets */
-                    _clearView : function() {
-                        var that = this;
-                        var groupLayer = that._groupLayer;
-                        _.each(this._index, function(layer, resourceId) {
-                            groupLayer.removeLayer(layer);
-                        })
-                        if (groupLayer.clusterLayer) {
-                            groupLayer.removeLayer(groupLayer.clusterLayer);
-                            delete groupLayer.clusterLayer;
-                        }
-                        delete that._index;
-                    },
+            /** Cleans up already existing widgets */
+            _clearView : function() {
+                var that = this;
+                var groupLayer = that._groupLayer;
+                _.each(this._index, function(layer, resourceId) {
+                    groupLayer.removeLayer(layer);
+                })
+                if (groupLayer.clusterLayer) {
+                    groupLayer.removeLayer(groupLayer.clusterLayer);
+                    delete groupLayer.clusterLayer;
+                }
+                delete that._index;
+            },
 
-                    /** Visualizes all data associated with this data set */
-                    _doRender : function() {
-                        var that = this;
-                        this._clearView();
+            /** Visualizes all data associated with this data set */
+            _doRender : function() {
+                var that = this;
+                this._clearView();
 
-                        this._index = {};
-                        var clusterLayer = null;
-                        var makeCluster = that._getDatasetOptions(
-                                'clusterPoints', false);
-                        if (makeCluster) {
-                            var clusterOptions = that._getDatasetOptions(
-                                    'clusterOptions', {});
-                            clusterOptions = _.extend({
-                                spiderfyOnMaxZoom : true,
-                                removeOutsideVisibleBounds : true
-                            }, clusterOptions)
-                            clusterLayer = new L.MarkerClusterGroup(
-                                    clusterOptions);
-                        }
-                        if (clusterLayer) {
-                            that._groupLayer.addLayer(clusterLayer);
-                            that._groupLayer.clusterLayer = clusterLayer;
-                        }
-                        var that = this;
-                        this._dataSet.loadResources({}).then(
-                                function(cursor) {
-                                    var resources = cursor.getList();
-                                    _.each(resources, function(resource) {
-                                        that._renderResourceFigure(resource,
-                                                that._groupLayer);
-                                    }, that);
-                                })
-                    },
+                this._index = {};
+                var clusterLayer = null;
+                var makeCluster = that._getDatasetOptions('clusterPoints',
+                        false);
+                if (makeCluster) {
+                    var clusterOptions = that._getDatasetOptions(
+                            'clusterOptions', {});
+                    clusterOptions = _.extend({
+                        spiderfyOnMaxZoom : true,
+                        removeOutsideVisibleBounds : true
+                    }, clusterOptions)
+                    clusterLayer = new L.MarkerClusterGroup(clusterOptions);
+                }
+                if (clusterLayer) {
+                    that._groupLayer.addLayer(clusterLayer);
+                    that._groupLayer.clusterLayer = clusterLayer;
+                }
+                var that = this;
+                this._dataSet.loadResources({}).then(function(cursor) {
+                    var resources = cursor.getList();
+                    _.each(resources, function(resource) {
+                        that._renderResourceFigure(resource, that._groupLayer);
+                    }, that);
+                })
+            },
 
-                    /**
-                     * Returns an options object defining visualization of
-                     * figures on the map.
-                     */
-                    _getFigureOptions : function(resource) {
-                        /* Creates a view for this resource */
-                        var options = _.extend({}, resource.geometry.options);
-                        var view = this.newResourceView(Mosaic.MapMarkerView,
-                                resource);
-                        if (view) {
-                            view.render();
-                            options = _.extend(options, Mosaic.Utils
-                                    .getOptions(view.options));
-                            var iconOptions = Mosaic.Utils
-                                    .getOptions(view.icon);
-                            if (Mosaic.MapMarkerView.hasHtmlMarker(view)) {
-                                iconOptions.html = view.getElement().html();
-                                iconOptions = _.extend({
-                                    className : '',
-                                    iconSize : [ undefined, undefined ]
-                                }, iconOptions);
-                                options.icon = L.divIcon(iconOptions);
-                            } else if (iconOptions.iconUrl) {
-                                options.icon = L.icon(iconOptions);
-                            }
-                        }
-                        options.view = view;
-                        return options;
-                    },
-                    /**
-                     * Renders an individual resource and adds the corresonding
-                     * Leaflet layer to the specified group layer
-                     */
-                    _renderResourceFigure : function(resource, groupLayer) {
-                        var geom = resource.geometry;
-                        if (this._isEmptyGeometry(geom)) {
-                            return false;
-                        }
-                        var options = this._getFigureOptions(resource);
-                        var layer = L.GeoJSON.geometryToLayer(resource,
-                                function(resource, latlng) {
-                                    var layer = new L.Marker(latlng, options);
-                                    layer._ismarker = true;
-                                    return layer;
-                                }, L.GeoJSON.coordsToLatLng, options);
-                        this._bindLayerEventListeners(layer, function(e) {
-                            return resource;
-                        });
-
-                        var resourceId = this._dataSet.getResourceId(resource);
-                        this._index[resourceId] = layer;
-                        if (groupLayer.clusterLayer && layer._ismarker) {
-                            groupLayer.clusterLayer.addLayer(layer);
-                        } else {
-                            groupLayer.addLayer(layer);
-                        }
-                    },
-
-                    /**
-                     * Returns a Leaflet layer corresponding to the specified
-                     * resource.
-                     */
-                    _getResourceLayer : function(resource) {
-                        var that = this;
-                        var id = that._dataSet.getResourceId(resource);
-                        var layer = that._index[id];
-                        return layer;
+            /**
+             * Returns an options object defining visualization of figures on
+             * the map.
+             */
+            _getFigureOptions : function(resource) {
+                /* Creates a view for this resource */
+                var options = _.extend({}, resource.geometry.options);
+                var view = this.newResourceView(Mosaic.MapMarkerView, //
+                resource);
+                if (view) {
+                    view.render();
+                    options = _.extend(options, Mosaic.Utils
+                            .getOptions(view.options));
+                    var iconOptions = Mosaic.Utils.getOptions(view.icon);
+                    if (Mosaic.MapMarkerView.hasHtmlMarker(view)) {
+                        iconOptions.html = view.getElement().html();
+                        iconOptions = _.extend({
+                            className : '',
+                            iconSize : [ undefined, undefined ]
+                        }, iconOptions);
+                        options.icon = L.divIcon(iconOptions);
+                    } else if (iconOptions.iconUrl) {
+                        options.icon = L.icon(iconOptions);
                     }
-
+                }
+                options.view = view;
+                return options;
+            },
+            /**
+             * Renders an individual resource and adds the corresonding Leaflet
+             * layer to the specified group layer
+             */
+            _renderResourceFigure : function(resource, groupLayer) {
+                var geom = resource.geometry;
+                if (this._isEmptyGeometry(geom)) {
+                    return false;
+                }
+                var options = this._getFigureOptions(resource);
+                var layer = L.GeoJSON.geometryToLayer(resource, function(
+                        resource, latlng) {
+                    var layer = new L.Marker(latlng, options);
+                    layer._ismarker = true;
+                    return layer;
+                }, L.GeoJSON.coordsToLatLng, options);
+                this._bindLayerEventListeners(layer, function(e) {
+                    return resource;
                 });
+
+                var resourceId = this._dataSet.getResourceId(resource);
+                this._index[resourceId] = layer;
+                if (groupLayer.clusterLayer && layer._ismarker) {
+                    groupLayer.clusterLayer.addLayer(layer);
+                } else {
+                    groupLayer.addLayer(layer);
+                }
+            },
+
+            /**
+             * Returns a Leaflet layer corresponding to the specified resource.
+             */
+            _getResourceLayer : function(resource) {
+                var that = this;
+                var id = that._dataSet.getResourceId(resource);
+                var layer = that._index[id];
+                return layer;
+            }
+
+        });
 
         /* ------------------------------------------------- */
         /** Resource visualization in the list. */
@@ -2539,6 +2567,15 @@
 
         });
 
+        /**
+         * The code of this class was mostly copied from the leaflet.utfgrid
+         * Leaflet extension (MIT license, by David Leaver). The difference with
+         * the original implementation is that 1) this class delegates tiles
+         * loading/caching/canceling operations to an Mosaic.UtfGrid.Loader
+         * instance; 2) this class notifies about loading of tiles for each new
+         * screen using the "startLoading"/"endLoading" events; 3) it loads
+         * tiles starting from the center of the current screen.
+         */
         Mosaic.UtfGrid.MapLayer = Mosaic.Class.extend({
             /** Initializes this layer */
             initialize : function(options) {
@@ -2777,46 +2814,6 @@
                 this._setGridLayerVisibility(true);
             },
 
-            /**
-             * Binds listeners to the underlying data set to reflect data
-             * changes on the map.
-             */
-            _bindDataEventListeners : function() {
-                var proto = Mosaic.DataSetMapAdapter.prototype;
-                proto._bindDataEventListeners.apply(this, arguments);
-                this.listenTo(this._dataSet, 'hide', function(e) {
-                    if (e.hideTiles) {
-                        this._setTilesLayerVisibility(false);
-                    }
-                    if (e.hideGrid) {
-                        this._setGridLayerVisibility(false);
-                    }
-                });
-                this.listenTo(this._dataSet, 'show', function(e) {
-                    if (e.showTiles) {
-                        this._setTilesLayerVisibility(true);
-                    }
-                    if (e.showGrid) {
-                        this._setGridLayerVisibility(true);
-                    }
-                });
-                this.listenTo(this._dataSet, 'update', this._onUpdate);
-                this.listenTo(this._dataSet, 'refresh', this._onRefresh);
-            },
-
-            /**
-             * This internal method unbinds/removes event listeners from the
-             * underlying data set.
-             */
-            _unbindDataEventListeners : function() {
-                var proto = Mosaic.DataSetMapAdapter.prototype;
-                proto._unbindDataEventListeners.apply(this, arguments);
-                this.stopListening(this._dataSet, 'hide');
-                this.stopListening(this._dataSet, 'show');
-                this.stopListening(this._dataSet, 'update');
-                this.stopListening(this._dataSet, 'refresh');
-            },
-
             /** Returns the visibility status of the tiles layer. */
             isTilesLayerVisible : function() {
                 return !!this._tilesLayerVisible;
@@ -2848,29 +2845,6 @@
                     } else {
                         this._groupLayer.removeLayer(this._gridLayer);
                     }
-                }
-            },
-
-            /**
-             * This method is used to re-draw map tiles when the underlying data
-             * set changes.
-             */
-            _onUpdate : function(e) {
-                this._refreshView();
-            },
-
-            /** This method is called when new resources are loaded */
-            _onRefresh : function(evt) {
-                console.log('I AM  HERE', evt)
-                if (evt.existing.length || evt.added.length
-                        || evt.removed.length) {
-                    console.log('-------------------');
-                    if (evt.existing.length)
-                        console.log('*  common: ', evt.existing);
-                    if (evt.added.length)
-                        console.log('*   added: ', evt.added);
-                    if (evt.removed.length)
-                        console.log('* removed: ', evt.removed);
                 }
             },
 
@@ -2975,6 +2949,38 @@
                 this._rendered = true;
             },
 
+            /* -------------------------- */
+            /* Individual event listeners */
+
+            _onShow : function(e) {
+                if (e.hideTiles) {
+                    this._setTilesLayerVisibility(false);
+                }
+                if (e.hideGrid) {
+                    this._setGridLayerVisibility(false);
+                }
+            },
+
+            _onHide : function(e) {
+                if (e.showTiles) {
+                    this._setTilesLayerVisibility(true);
+                }
+                if (e.showGrid) {
+                    this._setGridLayerVisibility(true);
+                }
+            },
+
+            /**
+             * This method is used to re-draw map tiles when the underlying data
+             * set changes.
+             */
+            _onUpdate : function(e) {
+                this._refreshView();
+            },
+
+            /** This method is called when new resources are loaded */
+            _onRefresh : function(evt) {
+            },
         })
 
         /* ------------------------------------------------- */
