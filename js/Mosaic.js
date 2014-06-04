@@ -860,7 +860,37 @@
          * This dataset is used as a wrapper for a collection of GeoJSON
          * objects.
          */
-        Mosaic.GeoJsonDataSet = Mosaic.DataSet.extend({
+        Mosaic.ResourceCollectionDataSet = Mosaic.DataSet.extend({
+            type : 'ResourceCollectionDataSet',
+
+            /** Returns underlying resources as a list */
+            _getList : function() {
+                throw new Error('Not implemented');
+            },
+
+            /** Returns the underlying list of resources. */
+            loadResources : function() {
+                var that = this;
+                return that._getList().then(function(list) {
+                    return that._loadNewCursor(list);
+                })
+            },
+
+            /** Creates and returns a new cursor wrapping the specified list */
+            _loadNewCursor : function(list) {
+                var cursor = new Mosaic.ResourceCursor({
+                    list : list
+                });
+                return Mosaic.Promise(cursor);
+            },
+
+        });
+
+        /**
+         * This dataset is used as a wrapper for a collection of GeoJSON
+         * objects.
+         */
+        Mosaic.GeoJsonDataSet = Mosaic.ResourceCollectionDataSet.extend({
             type : 'GeoJsonDataSet',
 
             _loadData : function() {
@@ -894,22 +924,6 @@
                 }
             },
 
-            /** Returns the underlying list of resources. */
-            loadResources : function() {
-                var that = this;
-                return that._getList().then(function(list) {
-                    return that._loadNewCursor(list);
-                })
-            },
-
-            /** Creates and returns a new cursor wrapping the specified list */
-            _loadNewCursor : function(list) {
-                var cursor = new Mosaic.ResourceCursor({
-                    list : list
-                });
-                return Mosaic.Promise(cursor);
-            },
-
             /** Debug feature */
             deleteResource : function(resource) {
                 var that = this;
@@ -930,10 +944,10 @@
         /* --------------------------------------------------- */
 
         /**
-         * This dataset corresponds to static map tiles. It don't have any
-         * data/resources.
+         * Mosaic.ResourceCollectionDataSet This dataset corresponds to static
+         * map tiles. It don't have any data/resources.
          */
-        Mosaic.TilesDataSet = Mosaic.DataSet.extend({
+        Mosaic.TilesDataSet = Mosaic.ResourceCollectionDataSet.extend({
             type : 'TilesDataSet',
 
             _resourceIndex : {},
@@ -1007,8 +1021,14 @@
                 return this.options.attribution;
             },
 
+            /** Returns a list of already loaded resources */
             getLoadedResources : function() {
                 return _.values(this._resourceIndex);
+            },
+
+            /** Returns a promise giving access to already loaded resources */
+            _getList : function() {
+                return Mosaic.Promise(this.getLoadedResources());
             },
 
             /**
@@ -1481,10 +1501,8 @@
                     view : this,
                     dataSet : dataSet
                 });
-                if (adapter && adapter.renderView) {
-                    adapter.renderView();
-                    this.setEntity(dataSet.getId(), adapter);
-                }
+                this.setEntity(dataSet.getId(), adapter);
+                this.onDataSetUpdate(e);
             },
 
             /**
@@ -1503,13 +1521,11 @@
              * This method is invoked when a dataset is changed.
              */
             onDataSetUpdate : function(e) {
-                // this.onDataSetRemove(e);
-                // this.onDataSetAdd(e);
-                // var dataSet = e.dataSet;
-                // var adapter = this.getEntity(dataSet.getId());
-                // if (adapter && adapter.render) {
-                // adapter.renderView();
-                // }
+                var dataSet = e.dataSet;
+                var adapter = this.getEntity(dataSet.getId());
+                if (adapter && adapter.renderView) {
+                    adapter.renderView();
+                }
             }
 
         });
@@ -3411,6 +3427,10 @@
                 Mosaic.GeoJsonMapViewAdapter);
         adapters.registerAdapter(Mosaic.ListView, Mosaic.GeoJsonDataSet,
                 Mosaic.GeoJsonListViewAdapter);
+
+        adapters.registerAdapter(Mosaic.ListView, Mosaic.TilesDataSet,
+                Mosaic.GeoJsonListViewAdapter);
+
         adapters.registerAdapter(Mosaic.ExpandedView, Mosaic.GeoJsonDataSet,
                 Mosaic.GeoJsonExpandedViewAdapter);
 
