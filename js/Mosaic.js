@@ -10,7 +10,9 @@
     function module(_, $, L) {
 
         /** Common namespace */
-        var Mosaic = {};
+        var Mosaic = function() {
+        }
+        Mosaic.prototype = Mosaic;
 
         /* --------------------------------------------------- */
         /* Static utility methods */
@@ -285,6 +287,87 @@
         })
 
         /* ------------------------------------------------- */
+        /* Input/Output utility methods */
+        Mosaic.IO = {
+
+            /**
+             * Return a promise for the data loaded from the specified URL
+             */
+            loadJson : function(url) {
+                var deferred = Mosaic.Promise.defer();
+                $.ajax({
+                    dataType : "json",
+                    url : url,
+                    data : undefined,
+                    success : function(data) {
+                        deferred.resolve(data);
+                    },
+                    fail : function(error) {
+                        deferred.reject(error);
+                    }
+                });
+                return deferred.promise;
+            },
+
+            /**
+             * Loads and return a JSONP object.
+             */
+            loadJsonp : function(url, callbackKey) {
+                var callbackName;
+                var script;
+                var head;
+                var doc = document;
+                var wnd = window;
+                var deferred = Mosaic.Promise.defer();
+                try {
+                    callbackKey = callbackKey || 'cb';
+                    callbackName = _.uniqueId(callbackKey);
+                    script = doc.createElement('script');
+                    head = doc.getElementsByTagName('head')[0];
+                    var options = {};
+                    options[callbackKey] = callbackName;
+                    var url = Mosaic.IO.prepareUrl(url, options)
+                    script.setAttribute("type", "text/javascript");
+                    script.setAttribute("src", url);
+                    wnd[callbackName] = function(data) {
+                        deferred.resolve(data);
+                    };
+                    head.appendChild(script);
+                } catch (err) {
+                    deferred.reject(err);
+                }
+                return Mosaic.Promise.fin(deferred.promise, function() {
+                    if (callbackName) {
+                        delete wnd[callbackName];
+                    }
+                    if (head && script) {
+                        head.removeChild(script);
+                    }
+                });
+            },
+
+            /**
+             * Replaces all "variables" in the specified string by values from
+             * the given object. If for the options object contains a function
+             * corresponding to key then this function is called and results are
+             * used as values to put in the string.
+             */
+            prepareUrl : function(template, options) {
+                return template.replace(/\{\s*([\w_]+)\s*\}/gim, function(str,
+                        key) {
+                    var value = options[key];
+                    if (_.isFunction(value)) {
+                        value = value(options);
+                    } else if (value === undefined) {
+                        value = str;
+                    }
+                    return value;
+                });
+            }
+
+        }
+
+        /* ------------------------------------------------- */
 
         /**
          * A simple Promise-like wrapper around jQuery promises.
@@ -303,6 +386,58 @@
             var deferred = $.Deferred();
             deferred.promise = deferred.promise();
             return deferred;
+        }
+        /**
+         * Executes a specified metho when the given promise completes (with a
+         * failure or with a success).
+         */
+        Mosaic.Promise.fin = function(promise, method) {
+            return promise.then(function(result) {
+                method();
+                return result;
+            }, function(err) {
+                method();
+                throw err;
+            })
+        }
+
+        /** Returns a promise waiting for completion for all specified promises. */
+        Mosaic.Promise.all = function(promises, failFast) {
+            var deferred = Mosaic.Promise.defer();
+            var results = [];
+            var errors = [];
+            var hasErrors = false;
+            var counter = 0;
+            function begin(idx) {
+                results[idx] = null;
+                errors[idx] = null;
+                return counter++;
+            }
+            function end(idx, result, error) {
+                counter--;
+                if (error) {
+                    errors[idx] = error;
+                    hasErrors = true;
+                } else {
+                    results[idx] = result;
+                }
+                if (counter == 0 || (!!error && !!failFast)) {
+                    if (hasErrors) {
+                        deferred.reject(errors);
+                    } else {
+                        deferred.resolve(results);
+                    }
+                }
+            }
+            _.each(promises, function(promise) {
+                var idx = begin(counter);
+                promise.then(function(result) {
+                    end(idx, result);
+                }, function(err) {
+                    end(idx, null, err);
+                })
+            })
+            return deferred.promise;
         }
 
         /* --------------------------------------------------- */
@@ -733,7 +868,8 @@
                 if (!that._loadPromise) {
                     if (that.options.url) {
                         that._loadPromise = //
-                        that._loadJson(that.options.url).then(function(data) {
+                        Mosaic.IO.loadJson(that.options.url) // 
+                        .then(function(data) {
                             var result = data && //
                             _.isArray(data.features) ? data.features : data;
                             return _.toArray(result);
@@ -772,19 +908,6 @@
                     list : list
                 });
                 return Mosaic.Promise(cursor);
-            },
-
-            /**
-             * Return a promise for the data loaded from the specified URL
-             */
-            _loadJson : function(url) {
-                var deferred = Mosaic.Promise.defer();
-                $.get(url, function(data) {
-                    deferred.resolve(data);
-                }).fail(function(error) {
-                    deferred.reject(error);
-                });
-                return deferred.promise;
             },
 
             /** Debug feature */
@@ -880,7 +1003,38 @@
             /** Returns tile layer attribution to show on the map. */
             getAttribution : function() {
                 return this.options.attribution;
+            },
+
+            /**
+             * This method is used by the map adapter to set a new set of
+             * resources loaded by UTFGrid layers.
+             */
+            _setLoadedResources : function(index) {
+                var that = this;
+                if (!that._resourceIndex)
+                    that._resourceIndex = {};
+                var added = _.filter(index, function(resource, id) {
+                    return !_.has(that._resourceIndex, id);
+                });
+                var removed = _.filter(that._resourceIndex, function(resource,
+                        id) {
+                    return !_.has(index, id);
+                });
+                if (added.length || removed.length) {
+                    var commons = _.filter(that._resourceIndex, function(
+                            resource, id) {
+                        return _.has(index, id);
+                    });
+                    var event = that.newEvent({
+                        existing : commons,
+                        added : added,
+                        removed : removed
+                    });
+                    that.fire('refresh', event);
+                }
+                that._resourceIndex = index;
             }
+
         })
 
         /* --------------------------------------------------- */
@@ -2306,6 +2460,312 @@
 
         /* ------------------------------------------------- */
 
+        Mosaic.UtfGrid = {};
+        Mosaic.UtfGrid.Loader = Mosaic.Class.extend({
+
+            initialize : function(options) {
+                this.options = options || {};
+                if (this.options.useJsonP == undefined) {
+                    this.options.useJsonP = true;
+                }
+                this._cache = {};
+            },
+
+            /**
+             * Returns an already loaded tile corresponding to the specified
+             * zoom and tile index.
+             */
+            getTile : function(zoom, point) {
+                var key = this._getKey(zoom, point);
+                return this._cache[key];
+            },
+
+            /**
+             * Returns a promise for a set of tiles corresponding to the
+             * specified zoom and tile indexes.
+             */
+            loadTiles : function(zoom, points, tiles) {
+                var that = this;
+                tiles = tiles || [];
+                return Mosaic.Promise.all(_.map(points, function(point) {
+                    var idx = tiles.length;
+                    tiles.push(null);
+                    return that.loadTile(zoom, point).then(function(tile) {
+                        tiles[idx] = tile;
+                        return tile;
+                    });
+                }));
+            },
+
+            /**
+             * Returns a promise for a tile corresponding to the specified zoom
+             * and tile index.
+             */
+            loadTile : function(zoom, point) {
+                var that = this;
+                var key = that._getKey(zoom, point);
+                var tile = that._cache[key];
+                if (tile)
+                    return Mosaic.Promise(tile);
+                return that._loadTile(zoom, point).then(function(tile) {
+                    that._cache[key] = tile;
+                    return tile;
+                })
+            },
+
+            /**
+             * Loads a tile corresponding to the specified zoom level and index.
+             * Returns a promise for the expected tile.
+             */
+            _loadTile : function(zoom, point) {
+                var useJsonP = this.options.useJsonP;
+                var options = {
+                    x : point.x,
+                    y : point.y,
+                    z : zoom
+                };
+                if (!useJsonP) {
+                    options.cb = '';
+                }
+                var url = Mosaic.IO.prepareUrl(this.options.url, options);
+                return (useJsonP ? Mosaic.IO.loadJsonp(url) : Mosaic.IO
+                        .loadJson(url));
+            },
+
+            /** Returns a cache key used to keep loaded tiles. */
+            _getKey : function(zoom, point) {
+                return zoom + '-' + point.x + '-' + point.y;
+            }
+
+        });
+
+        Mosaic.UtfGrid.MapLayer = Mosaic.Class.extend({
+            /** Initializes this layer */
+            initialize : function(options) {
+                this.options = options || {};
+                _.defaults(this.options, {
+                    minZoom : 0,
+                    maxZoom : 25,
+                    tileSize : 256,
+                    resolution : 4,
+                    pointerCursor : true
+                })
+                this._loader = this.options.loader
+                        || new Mosaic.UtfGrid.Loader(this.options);
+            },
+            /**
+             * This method is called when this layer is added to the map.
+             */
+            onAdd : function(map) {
+                this._map = map;
+                this._container = this._map._container;
+                this._update();
+                map.on('click', this._click, this);
+                map.on('mousemove', this._move, this);
+                map.on('moveend', this._update, this);
+            },
+            /**
+             * This method is called when this layer is removed from the map.
+             */
+            onRemove : function() {
+                var map = this._map;
+                map.off('click', this._click, this);
+                map.off('mousemove', this._move, this);
+                map.off('moveend', this._update, this);
+                if (this.options.pointerCursor) {
+                    this._container.style.cursor = '';
+                }
+            },
+
+            /** Map click handler */
+            _click : function(e) {
+                this.fire('click', this._objectForEvent(e));
+            },
+
+            /** Map move handler */
+            _move : function(e) {
+                var on = this._objectForEvent(e);
+                if (on.data !== this._mouseOn) {
+                    if (this._mouseOn) {
+                        this.fire('mouseout', {
+                            latlng : e.latlng,
+                            data : this._mouseOn
+                        });
+                        if (this.options.pointerCursor) {
+                            this._container.style.cursor = '';
+                        }
+                    }
+                    if (on.data) {
+                        this.fire('mouseover', on);
+                        if (this.options.pointerCursor) {
+                            this._container.style.cursor = 'pointer';
+                        }
+                    }
+                    this._mouseOn = on.data;
+                } else if (on.data) {
+                    this.fire('mousemove', on);
+                }
+            },
+
+            /**
+             * Returns an object from UTF grid corresponding to the coordinates
+             * of the mouse event.
+             */
+            _objectForEvent : function(e) {
+                var map = this._map;
+                var zoom = map.getZoom();
+                var point = map.project(e.latlng);
+                var pos = this._getTilePosition(point);
+                var tile = this._loader.getTile(zoom, pos);
+                var result;
+                if (tile) {
+                    result = this._getTileObject(tile, point);
+                }
+                return {
+                    latlng : e.latlng,
+                    data : result
+                };
+            },
+
+            /** Re-loads tiles for new map position */
+            _update : function() {
+                // Check if tiles should be loaded
+                var zoom = this._map.getZoom();
+                var tileSize = this.options.tileSize;
+                if (zoom > this.options.maxZoom //
+                        || zoom < this.options.minZoom) {
+                    return;
+                }
+
+                // Load tiles
+                var bounds = this._map.getPixelBounds();
+                var min = this._getTilePosition(bounds.min);
+                var max = this._getTilePosition(bounds.max);
+                var queue = this._getTilesReferencesFromCenterOut(min, max);
+
+                var tiles = [];
+                var evt = {
+                    queue : queue,
+                    tiles : tiles
+                };
+                var that = this;
+                that.fire('startLoading', evt);
+                that._loader.loadTiles(zoom, queue, tiles) //
+                .then(function(tiles) {
+                    that.fire('endLoading', evt);
+                }, function(errors) {
+                    evt.errors = errors;
+                    that.fire('endLoading', evt);
+                });
+            },
+
+            /** Calculates order of tiles loading */
+            _getTilesReferencesFromCenterOut : function(min, max) {
+                var queue = [];
+                for (var j = min.y; j <= max.y; j++) {
+                    for (var i = min.x; i <= max.x; i++) {
+                        queue.push(this._newPoint(i, j));
+                    }
+                }
+                if (queue.length) {
+                    var that = this;
+                    var center = this._newPoint((min.x + max.x) / 2,
+                            (min.y + max.y) / 2);
+                    queue.sort(function(a, b) {
+                        var delta = that._distance(a, center)
+                                - that._distance(b, center);
+                        return delta;
+                    });
+                }
+                return queue;
+            },
+
+            /**
+             * Creates and returns a new point object (containing X/Y
+             * coordinates).
+             */
+            _newPoint : function(x, y) {
+                if (x.length) {
+                    y = x[1];
+                    x = x[0];
+                }
+                return {
+                    x : x,
+                    y : y,
+                    toString : function() {
+                        return JSON.stringify(this, null, 2);
+                    }
+                }
+            },
+
+            /**
+             * Returns an object from the specified tile corresponding to the
+             * given position.
+             */
+            _getTileObject : function(tile, point) {
+                var gridX = this._getTileShift(point.x);
+                var gridY = this._getTileShift(point.y);
+                var idx = this._utfDecode(tile.grid[gridY].charCodeAt(gridX));
+                var key = tile.keys[idx];
+                var result = tile.data[key];
+                return result;
+            },
+
+            /**
+             * Returns a list of all objects contained in the specified UTFGrid
+             * tile.
+             */
+            getTileObjects : function(tile) {
+                return tile && tile.data ? _.values(tile.data) : [];
+            },
+
+            /**
+             * Calculates distance between two points. This method is used to
+             * calculate order of tiles loading.
+             */
+            _distance : function(a, b) {
+                var x = a.x - b.x;
+                var y = a.y - b.y;
+                return Math.sqrt(x * x + y * y);
+            },
+
+            /**
+             * Returns X/Y coordinates of the tile corresponding to the
+             * specified point on the map
+             */
+            _getTilePosition : function(point) {
+                var tileSize = this.options.tileSize;
+                return this._newPoint(Math.floor(point.x / tileSize), Math
+                        .floor(point.y / tileSize));
+            },
+
+            /**
+             * Returns position of the specified coordinates in a tile
+             */
+            _getTileShift : function(val) {
+                var tileSize = this.options.tileSize;
+                var resolution = this.options.resolution;
+                return Math
+                        .floor((val - (Math.floor(val / tileSize) * tileSize))
+                                / resolution);
+            },
+
+            /**
+             * Decodes the specified character and transforms it in an index
+             */
+            _utfDecode : function(ch) {
+                if (ch >= 93) {
+                    ch--;
+                }
+                if (ch >= 35) {
+                    ch--;
+                }
+                return ch - 32;
+            }
+
+        });
+
+        /* ------------------------------------------------- */
         /** Adapters of tilesets to the MapView */
         Mosaic.TileSetMapViewAdapter = Mosaic.DataSetMapAdapter.extend({
 
@@ -2341,6 +2801,7 @@
                     }
                 });
                 this.listenTo(this._dataSet, 'update', this._onUpdate);
+                this.listenTo(this._dataSet, 'refresh', this._onRefresh);
             },
 
             /**
@@ -2353,6 +2814,7 @@
                 this.stopListening(this._dataSet, 'hide');
                 this.stopListening(this._dataSet, 'show');
                 this.stopListening(this._dataSet, 'update');
+                this.stopListening(this._dataSet, 'refresh');
             },
 
             /** Returns the visibility status of the tiles layer. */
@@ -2395,6 +2857,21 @@
              */
             _onUpdate : function(e) {
                 this._refreshView();
+            },
+
+            /** This method is called when new resources are loaded */
+            _onRefresh : function(evt) {
+                console.log('I AM  HERE', evt)
+                if (evt.existing.length || evt.added.length
+                        || evt.removed.length) {
+                    console.log('-------------------');
+                    if (evt.existing.length)
+                        console.log('*  common: ', evt.existing);
+                    if (evt.added.length)
+                        console.log('*   added: ', evt.added);
+                    if (evt.removed.length)
+                        console.log('* removed: ', evt.removed);
+                }
             },
 
             /** Returns z-index for these layers */
@@ -2445,7 +2922,23 @@
                 var utfgridUrl = this._dataSet.getDataGridUrl();
                 if (!utfgridUrl)
                     return;
-                var layer = new L.UtfGrid(utfgridUrl);
+                var layer = new Mosaic.UtfGrid.MapLayer({
+                    url : utfgridUrl
+                });
+                var that = this;
+                layer.on('endLoading', function(e) {
+                    var index = {};
+                    _.each(e.tiles, function(tile) {
+                        var resources = layer.getTileObjects(tile);
+                        _.each(resources, function(resource) {
+                            var id = that._dataSet.getResourceId(resource);
+                            index[id] = resource;
+                        })
+                    })
+                    that._dataSet._setLoadedResources(index);
+                });
+
+                // var layer = new L.UtfGrid(utfgridUrl);
                 this._bindLayerEventListeners(layer, function(e) {
                     var data = e.data;
                     if (!data)
@@ -2466,7 +2959,7 @@
                 this._setGridLayerVisibility(this.isGridLayerVisible());
             },
 
-            /** Reloads the tiles and tiles layers. */
+            /** Reloads the tiles and grid layers. */
             _refreshView : function() {
                 this._setGridLayerVisibility(this.isGridLayerVisible());
                 this._setTilesLayerVisibility(this.isTilesLayerVisible());
