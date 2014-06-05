@@ -2939,7 +2939,6 @@
              * An internal method creating a new tiles layer.
              */
             _addTilesLayer : function() {
-                console.log('!!!! _addTilesLayer', new Error().stack)
                 var tilesUrl = this._dataSet.getTilesUrl();
                 if (!tilesUrl)
                     return;
