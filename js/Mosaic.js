@@ -869,7 +869,8 @@
             },
 
             /** Returns the underlying list of resources. */
-            loadResources : function() {
+            loadResources : function(options) {
+                options = options || {};
                 var that = this;
                 return that._getList().then(function(list) {
                     return that._loadNewCursor(list);
@@ -1502,7 +1503,9 @@
                     dataSet : dataSet
                 });
                 this.setEntity(dataSet.getId(), adapter);
-                this.onDataSetUpdate(e);
+                if (adapter && adapter.renderView) {
+                    adapter.renderView();
+                }
             },
 
             /**
@@ -1521,11 +1524,11 @@
              * This method is invoked when a dataset is changed.
              */
             onDataSetUpdate : function(e) {
-                var dataSet = e.dataSet;
-                var adapter = this.getEntity(dataSet.getId());
-                if (adapter && adapter.renderView) {
-                    adapter.renderView();
-                }
+                // var dataSet = e.dataSet;
+                // var adapter = this.getEntity(dataSet.getId());
+                // if (adapter && adapter.renderView) {
+                // adapter.renderView();
+                // }
             }
 
         });
@@ -1954,6 +1957,132 @@
 
         /* ------------------------------------------------- */
 
+        /**
+         * DataSetViewAdapter - an abstract superclass for all adapters
+         * rendering DataSet objects in views.
+         */
+        Mosaic.DataSetViewAdapter = Mosaic.ViewAdapter.extend({
+
+            /**
+             * This internal method binds data set event listeners visualizing
+             * resources in popups.
+             */
+            _bindDataEventListeners : function() {
+                // Dataset-related events
+                this.listenTo(this._dataSet, 'update', this._onUpdate);
+                this.listenTo(this._dataSet, 'hide', this._onShow);
+                this.listenTo(this._dataSet, 'show', this._onHide);
+                this.listenTo(this._dataSet, 'search:begin', //
+                this._onBeginSearch);
+                this.listenTo(this._dataSet, 'search:end', //
+                this._onEndSearch);
+                // Resource-related events
+                this.listenTo(this._dataSet, 'activateResource',
+                        this._onActivateResource);
+                this.listenTo(this._dataSet, 'deactivateResource',
+                        this._onDeactivateResource)
+                this.listenTo(this._dataSet, 'focusResource',
+                        this._onFocusResource);
+                this.listenTo(this._dataSet, 'blurResource',
+                        this._onBlurResource);
+            },
+            /**
+             * This internal method unbinds/removes event listeners from the
+             * underlying data set.
+             */
+            _unbindDataEventListeners : function() {
+                // Dataset-related events
+                this.stopListening(this._dataSet, 'update');
+                this.stopListening(this._dataSet, 'refresh');
+                this.stopListening(this._dataSet, 'hide');
+                this.stopListening(this._dataSet, 'show');
+                this.stopListening(this._dataSet, 'search:begin');
+                this.stopListening(this._dataSet, 'search:end');
+
+                // Resource-related events
+                this.stopListening(this._dataSet, 'activateResource');
+                this.stopListening(this._dataSet, 'deactivateResource');
+                this.stopListening(this._dataSet, 'focusResource');
+                this.stopListening(this._dataSet, 'blurResource');
+            },
+
+            /**
+             * Returns options value corresponding to the specified key of the
+             * internal dataset
+             */
+            _getDatasetOptions : function(optionsKey, defaultValue) {
+                var value = Mosaic.Utils.getOption(this._dataSet, optionsKey);
+                if (value === undefined) {
+                    value = Mosaic.Utils.getOption(this._dataSet.options,
+                            optionsKey);
+                }
+                if (value === undefined) {
+                    value = defaultValue;
+                }
+                return value;
+            },
+
+            /** This method renders the underlying data set on the view. */
+            renderView : function() {
+                var that = this;
+                that._unbindDataEventListeners();
+                that._doRender();
+                that._bindDataEventListeners();
+            },
+
+            /** Removes data visualization from the parent view. */
+            resetView : function() {
+                var that = this;
+                that._unbindDataEventListeners();
+                that._doReset();
+                that.stopListening();
+            },
+
+            /* -------------------------- */
+            /* Methods to overload in subclasses */
+
+            /**
+             * This method should be overloaded in subclasses to visualize the
+             * DataSet on the underlying view.
+             */
+            _doRender : function() {
+                throw new Error('Not implemented');
+            },
+
+            /**
+             * This method should be overloaded in subclasses to reset the
+             * underlying view.
+             */
+            _doReset : function() {
+            },
+            /* -------------------------- */
+            /* Individual event listeners */
+
+            _onUpdate : function(e) {
+                this._doRender();
+            },
+            _onShow : function(e) {
+            },
+            _onHide : function(e) {
+            },
+            _onBeginSearch : function(e) {
+            },
+            _onEndSearch : function(e) {
+                // this._doRender();
+            },
+            _onActivateResource : function(e) {
+            },
+            _onDeactivateResource : function(e) {
+            },
+            _onFocusResource : function(e) {
+            },
+            _onBlurResource : function(e) {
+            }
+
+        })
+
+        /* ------------------------------------------------- */
+
         Mosaic.MapFocusedPopupView = Mosaic.MapPopupView.extend({
             type : 'MapFocusedPopupView'
         });
@@ -1961,7 +2090,7 @@
         /**
          * DataSetMapAdapter - an abstract superclass for MapView adapters
          */
-        Mosaic.DataSetMapAdapter = Mosaic.ViewAdapter.extend({
+        Mosaic.DataSetMapAdapter = Mosaic.DataSetViewAdapter.extend({
 
             /**
              * An internal method showing a popup with the rendered resource.
@@ -2069,50 +2198,6 @@
             },
 
             /**
-             * This internal method binds data set event listeners visualizing
-             * resources in popups.
-             */
-            _bindDataEventListeners : function() {
-                // Dataset-related events
-                this.listenTo(this._dataSet, 'update', this._onUpdate);
-                this.listenTo(this._dataSet, 'refresh', this._onRefresh);
-                this.listenTo(this._dataSet, 'hide', this._onShow);
-                this.listenTo(this._dataSet, 'show', this._onHide);
-                this.listenTo(this._dataSet, 'search:begin', //
-                this._onBeginSearch);
-                this.listenTo(this._dataSet, 'search:end', //
-                this._onEndSearch);
-                // Resource-related events
-                this.listenTo(this._dataSet, 'activateResource',
-                        this._onActivateResource);
-                this.listenTo(this._dataSet, 'deactivateResource',
-                        this._onDeactivateResource)
-                this.listenTo(this._dataSet, 'focusResource',
-                        this._onFocusResource);
-                this.listenTo(this._dataSet, 'blurResource',
-                        this._onBlurResource);
-            },
-            /**
-             * This internal method unbinds/removes event listeners from the
-             * underlying data set.
-             */
-            _unbindDataEventListeners : function() {
-                // Dataset-related events
-                this.stopListening(this._dataSet, 'update');
-                this.stopListening(this._dataSet, 'refresh');
-                this.stopListening(this._dataSet, 'hide');
-                this.stopListening(this._dataSet, 'show');
-                this.stopListening(this._dataSet, 'search:begin');
-                this.stopListening(this._dataSet, 'search:end');
-
-                // Resource-related events
-                this.stopListening(this._dataSet, 'activateResource');
-                this.stopListening(this._dataSet, 'deactivateResource');
-                this.stopListening(this._dataSet, 'focusResource');
-                this.stopListening(this._dataSet, 'blurResource');
-            },
-
-            /**
              * This internal method binds event listeners to map layers. These
              * listeners activates / deactivate / focus or blur the
              * corresponding resource.
@@ -2156,43 +2241,28 @@
                 layer.off('click');
             },
 
-            /**
-             * Returns options value corresponding to the specified key of the
-             * internal dataset
-             */
-            _getDatasetOptions : function(optionsKey, defaultValue) {
-                var value = Mosaic.Utils.getOption(this._dataSet, optionsKey);
-                if (value === undefined) {
-                    value = Mosaic.Utils.getOption(this._dataSet.options,
-                            optionsKey);
-                }
-                if (value === undefined) {
-                    value = defaultValue;
-                }
-                return value;
-            },
-
             /** This method renders data on the view. */
             renderView : function() {
                 var that = this;
-                that._unbindDataEventListeners();
                 that.resetView();
-                this._groupLayer = new L.FeatureGroup();
-                this._doRender();
-                var map = this._view.getMap();
-                map.addLayer(this._groupLayer);
+                that._groupLayer = new L.FeatureGroup();
+                that._doRender();
+                var map = that._view.getMap();
+                map.addLayer(that._groupLayer);
                 that._bindDataEventListeners();
             },
 
             /** Removes data visualization from the parent view. */
             resetView : function() {
-                var map = this._view.getMap();
+                var that = this;
+                var map = that._view.getMap();
                 map.closePopup();
-                if (this._groupLayer) {
-                    map.removeLayer(this._groupLayer);
-                    delete this._groupLayer;
+                if (that._groupLayer) {
+                    map.removeLayer(that._groupLayer);
+                    delete that._groupLayer;
                 }
-                this.stopListening();
+                that._unbindDataEventListeners();
+                that.stopListening();
             },
 
             /* Methods to overload in subclasses */
@@ -2207,22 +2277,11 @@
             },
 
             /* -------------------------- */
-            /* Individual event listeners */
+            /*
+             * Individual event listeners. Overloads default methods defined in
+             * the Mosaic.DataSetViewAdapter superclass.
+             */
 
-            _onUpdate : function(e) {
-                this._doRender();
-            },
-            _onRefresh : function(e) {
-            },
-            _onShow : function(e) {
-            },
-            _onHide : function(e) {
-            },
-            _onBeginSearch : function(e) {
-            },
-            _onEndSearch : function(e) {
-                this._doRender();
-            },
             _onActivateResource : function(e) {
                 var that = this;
                 var resource = that._dataSet.getResourceFromEvent(e);
@@ -2238,8 +2297,6 @@
                 } else {
                     doShow();
                 }
-            },
-            _onDeactivateResource : function(e) {
             },
             _onFocusResource : function(e) {
                 var viewPriority = e.priority;
@@ -2405,16 +2462,13 @@
 
         /* ------------------------------------------------- */
         /** GeoJsonDataSet - ListView adapter */
-        Mosaic.GeoJsonListViewAdapter = Mosaic.ViewAdapter.extend({
+        Mosaic.GeoJsonListViewAdapter = Mosaic.DataSetViewAdapter.extend({
 
-            /** Renders the specified dataset on the view (on the list). */
-            renderView : function() {
-                this._container = $('<div></div>');
-                var element = this._view.getElement();
-                element.append(this._container);
-
+            _doRender : function() {
                 var that = this;
-                that._unbindDataEventListeners();
+                that._container = $('<div></div>');
+                var element = that._view.getElement();
+                element.append(that._container);
                 that._resetViewIndex();
                 that._dataSet.loadResources({}).then(
                         function(cursor) {
@@ -2428,45 +2482,30 @@
                                     view.render();
                                 }
                             }, that);
-                        })
+                        });
                 that._delegateEventsToViews();
-                that._bindDataEventListeners();
             },
 
-            /**
-             * Binds list data event listeners scrolling active items into the
-             * view.
-             */
-            _bindDataEventListeners : function() {
+            _doReset : function() {
                 var that = this;
-                that.listenTo(that._dataSet, 'activateResource', function(e) {
-                    var resource = that._dataSet.getResourceFromEvent(e);
-                    var view = that._getResourceView(resource);
-                    if (!view) {
-                        return;
-                    }
-                    var top = view.$el.position().top
-                            + that._container.scrollTop()
-                            - that._container.position().top;
-                    that._view.$el.animate({
-                        scrollTop : top
-                    }, 300);
-                });
+                if (that._container) {
+                    that._container.remove();
+                    delete that._container;
+                }
             },
 
-            /**
-             * This internal method unbinds/removes event listeners from the
-             * underlying data set.
-             */
-            _unbindDataEventListeners : function() {
+            _onActivateResource : function(e) {
                 var that = this;
-                that.stopListening(that._dataSet, 'activateResource');
-            },
-
-            /** Removes all rendered resources from the list. */
-            resetView : function() {
-                this.stopListening();
-                this._container.remove();
+                var resource = that._dataSet.getResourceFromEvent(e);
+                var view = that._getResourceView(resource);
+                if (!view) {
+                    return;
+                }
+                var top = view.$el.position().top + that._container.scrollTop()
+                        - that._container.position().top;
+                that._view.$el.animate({
+                    scrollTop : top
+                }, 300);
             }
         })
 
@@ -2760,7 +2799,7 @@
                 var gridY = this._getTileShift(point.y);
                 var idx = this._utfDecode(tile.grid[gridY].charCodeAt(gridX));
                 var key = tile.keys[idx];
-                var result = tile.data[key];
+                var result = this._processData(tile.data[key]);
                 return result;
             },
 
@@ -2769,7 +2808,24 @@
              * tile.
              */
             getTileObjects : function(tile) {
-                return tile && tile.data ? _.values(tile.data) : [];
+                return tile && tile.data ? _.map(_.values(tile.data),
+                        this._processData, this) : [];
+            },
+
+            /**
+             * Pre-process individual data object before returning it to the
+             * caller.
+             */
+            _processData : function(data) {
+                if (!data)
+                    return data;
+                if (!this._processDataF) {
+                    this._processDataF = this.options.processData
+                            || function(data) {
+                                return data;
+                            };
+                }
+                return this._processDataF(data);
             },
 
             /**
@@ -2883,6 +2939,7 @@
              * An internal method creating a new tiles layer.
              */
             _addTilesLayer : function() {
+                console.log('!!!! _addTilesLayer', new Error().stack)
                 var tilesUrl = this._dataSet.getTilesUrl();
                 if (!tilesUrl)
                     return;
@@ -2913,7 +2970,17 @@
                 if (!utfgridUrl)
                     return;
                 var layer = new Mosaic.UtfGrid.MapLayer({
-                    url : utfgridUrl
+                    url : utfgridUrl,
+                    processData : function(data) {
+                        if (data.properties && _.isString(data.properties)
+                                && data.properties[0] == '{') {
+                            try {
+                                data.properties = JSON.parse(data.properties);
+                            } catch (e) {
+                            }
+                        }
+                        return data;
+                    }
                 });
                 var that = this;
                 layer.on('endLoading', function(e) {
@@ -2994,9 +3061,6 @@
                 this._refreshView();
             },
 
-            /** This method is called when new resources are loaded */
-            _onRefresh : function(evt) {
-            },
         })
 
         /* ------------------------------------------------- */
