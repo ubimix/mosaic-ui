@@ -2068,7 +2068,7 @@
             _onBeginSearch : function(e) {
             },
             _onEndSearch : function(e) {
-                // this._doRender();
+                this._doRender();
             },
             _onActivateResource : function(e) {
             },
