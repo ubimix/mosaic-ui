@@ -2068,7 +2068,6 @@
             _onBeginSearch : function(e) {
             },
             _onEndSearch : function(e) {
-                this._doRender();
             },
             _onActivateResource : function(e) {
             },
@@ -2466,9 +2465,12 @@
 
             _doRender : function() {
                 var that = this;
-                that._container = $('<div></div>');
-                var element = that._view.getElement();
-                element.append(that._container);
+                if (!that._container) {
+                    that._container = $('<div></div>');
+                    var element = that._view.getElement();
+                    element.append(that._container);
+                }
+                that._container.html('');
                 that._resetViewIndex();
                 that._dataSet.loadResources({}).then(
                         function(cursor) {
@@ -3058,6 +3060,11 @@
              */
             _onUpdate : function(e) {
                 this._refreshView();
+            },
+
+            _onEndSearch : function(e) {
+                this._doRender();
+                // this._refreshView();
             },
 
         })
