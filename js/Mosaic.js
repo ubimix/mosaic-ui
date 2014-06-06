@@ -759,9 +759,6 @@
                     that.fire('search:end', that.newEvent({
                         params : params
                     }));
-                    if (result) {
-                        that.fire('update', that.newEvent({}));
-                    }
                     return result;
                 });
             },
@@ -956,11 +953,9 @@
             /** Updates tiles URLs */
             _doSearch : function(params) {
                 var that = this;
-                return Mosaic.Promise().then(function() {
-                    delete that._tilesUrl;
-                    delete that._datagridUrl;
-                    return true;
-                });
+                delete that._tilesUrl;
+                delete that._datagridUrl;
+                return Mosaic.Promise(true);
             },
 
             /** Formats the specified URL by adding search parameters. */
@@ -2971,17 +2966,7 @@
                 if (!utfgridUrl)
                     return;
                 var layer = new Mosaic.UtfGrid.MapLayer({
-                    url : utfgridUrl,
-                    processData : function(data) {
-                        if (data.properties && _.isString(data.properties)
-                                && data.properties[0] == '{') {
-                            try {
-                                data.properties = JSON.parse(data.properties);
-                            } catch (e) {
-                            }
-                        }
-                        return data;
-                    }
+                    url : utfgridUrl
                 });
                 var that = this;
                 layer.on('endLoading', function(e) {
@@ -3064,7 +3049,6 @@
 
             _onEndSearch : function(e) {
                 this._doRender();
-                // this._refreshView();
             },
 
         })
