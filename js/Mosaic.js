@@ -155,7 +155,7 @@
             stopListening : function(object, event) {
                 if (object) {
                     this._listeners = _.filter(this._listeners, function(
-                            listener) {
+                        listener) {
                         var keep = true;
                         var context = listener.context || this;
                         if (listener.obj == object) {
@@ -354,7 +354,7 @@
              */
             prepareUrl : function(template, options) {
                 return template.replace(/\{\s*([\w_]+)\s*\}/gim, function(str,
-                        key) {
+                    key) {
                     var value = options[key];
                     if (_.isFunction(value)) {
                         value = value(options);
@@ -848,8 +848,12 @@
                 return this.options.end || this.getLength() - 1;
             },
             /** Returns array of elements covered by this cursor */
-            getList : function() {
-                return _.toArray(this.options.list);
+            getList : function(length) {
+                var array = _.toArray(this.options.list);
+                if (length) {
+                    array = array.slice(0, length);
+                }
+                return array;
             }
         });
 
@@ -1037,7 +1041,7 @@
                     return !_.has(that._resourceIndex, id);
                 });
                 var removed = _.filter(that._resourceIndex, function(resource,
-                        id) {
+                    id) {
                     return !_.has(index, id);
                 });
                 that._resourceIndex = index;
@@ -2411,7 +2415,7 @@
                 }
                 var options = this._getFigureOptions(resource);
                 var layer = L.GeoJSON.geometryToLayer(resource, function(
-                        resource, latlng) {
+                    resource, latlng) {
                     var layer = new L.Marker(latlng, options);
                     layer._ismarker = true;
                     return layer;
@@ -2467,9 +2471,12 @@
                 }
                 that._container.html('');
                 that._resetViewIndex();
+                that._beginLoading();
                 that._dataSet.loadResources({}).then(
                         function(cursor) {
-                            var list = cursor.getList();
+                            var length = that._getMaxResultsNumber();
+                            that._endLoading(length);
+                            var list = cursor.getList(length);
                             _.each(list, function(resource) {
                                 var view = that.newResourceView(
                                         Mosaic.ListItemView, resource);
@@ -2503,6 +2510,29 @@
                 that._view.$el.animate({
                     scrollTop : top
                 }, 300);
+            },
+
+            _beginLoading : function() {
+                var that = this;
+                if (_.isFunction(that._view.onBeginLoading)) {
+                    that._view.onBeginLoading();
+                }
+            },
+
+            _endLoading : function(length) {
+                var that = this;
+                if (_.isFunction(that._view.onEndLoading)) {
+                    that._view.onEndLoading(length);
+                }
+            },
+
+            _getMaxResultsNumber : function() {
+                var that = this;
+                var result = 200;
+                if (_.isFunction(that._view.getMaxResults)) {
+                    result = that._view.getMaxResults();
+                }
+                return result;
             }
         })
 
