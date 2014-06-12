@@ -1303,6 +1303,7 @@
 
             /** Removes all registered listeners and removes this view from DOM. */
             remove : function() {
+                this.triggerMethod('remove');
                 this.stopListening();
                 var element = this.getElement();
                 element.remove();
@@ -1591,6 +1592,7 @@
             open : function(options) {
                 var that = this;
                 var result = false;
+                options = options || {};
                 if (!_.isFunction(options.action)
                         || !that._checkPriority(options)) {
                     return Mosaic.Promise();
@@ -1605,7 +1607,7 @@
                                 var promise = that._deferred.promise;
                                 promise.then(function() {
                                     that._priority = 0;
-                                    // delete that._deferred;
+                                    delete that._deferred;
                                 });
                                 return promise;
                             });
@@ -1619,12 +1621,13 @@
             close : function(options) {
                 var that = this;
                 var result = false;
+                options = options || {};
                 var promise = Mosaic.Promise();
                 if (that._checkPriority(options)) {
                     result = true;
                     if (that._deferred) {
-                        that._deferred.resolve();
                         promise = that._deferred.promise;
+                        that._deferred.resolve();
                     }
                 }
                 return promise.then(function() {
@@ -2100,7 +2103,7 @@
                 var resource = that._dataSet.getResourceFromEvent(e);
                 var resourceId = that._dataSet.getResourceId(resource);
                 if (!resource || !resourceId)
-                    return;
+                    return Mosaic.Promise(false);
 
                 // Exit if there is no layers corresponding to the
                 // specified resource
@@ -2111,7 +2114,7 @@
                 // Exit if there is no visualization defined for the
                 // current resource type
                 if (!view) {
-                    return;
+                    return Mosaic.Promise(false);
                 }
 
                 // Render the view
@@ -2129,7 +2132,6 @@
 
                 // Get the popup options from the view
                 var options = Mosaic.Utils.getOptions(view.popupOptions);
-
                 var openPopup = function() {
                     var map = that._view.getMap();
 
@@ -2138,6 +2140,7 @@
 
                     // Set the popup content
                     var element = view.getElement();
+                    // FIXME: direct node appending
                     popup.setContent(element[0]);
 
                     // Set the coordinates of the popup
@@ -2174,14 +2177,18 @@
                     }, 1);
                     return deferred;
                 }
-
+                that._addResourceViewToIndex(view);
                 var control = that._view.getPopupControl();
-                control.open({
+                return control.open({
                     priority : viewPriority,
                     coordinates : coords,
                     layer : layer,
                     action : openPopup
-                }).done();
+                }).then(function() {
+                    that._removeResourceViewFromIndex(view);
+                    view.remove();
+                    return true;
+                });
             },
 
             /**
@@ -2214,7 +2221,8 @@
                     var coords = [ e.latlng.lng, e.latlng.lat ];
                     var event = that._dataSet.newEvent({
                         resource : resource,
-                        coords : coords
+                        coords : coords,
+                        force : true
                     });
                     that._dataSet[method](event);
                 }
@@ -2285,8 +2293,10 @@
                 var resource = that._dataSet.getResourceFromEvent(e);
                 var viewPriority = e.priority;
                 var doShow = function() {
-                    that._showPopup(e, Mosaic.MapActivePopupView, //
-                    viewPriority);
+                    that._reportErrors(that._showPopup(e,
+                            Mosaic.MapActivePopupView, //
+                            viewPriority).then(function(wasOpened) {
+                    }));
                 };
                 var layer = that._getResourceLayer(resource);
                 var clusterLayer = that._groupLayer.clusterLayer;
@@ -2297,14 +2307,22 @@
                 }
             },
             _onFocusResource : function(e) {
+                var that = this;
                 var viewPriority = e.priority;
-                this._showPopup(e, Mosaic.MapFocusedPopupView, viewPriority);
+                that._reportErrors(that._showPopup(e,
+                        Mosaic.MapFocusedPopupView, viewPriority).then(
+                        function(wasOpened) {
+                        }));
             },
             _onBlurResource : function(e) {
                 var viewPriority = e.priority;
                 this._closePopup(e, Mosaic.MapFocusedPopupView, viewPriority);
+            },
+            _reportErrors : function(promise) {
+                promise.then(null, function(err) {
+                    console.log(err, err.stack)
+                });
             }
-
         });
 
         /* ------------------------------------------------- */
@@ -2465,6 +2483,7 @@
             _doRender : function() {
                 var that = this;
                 if (!that._container) {
+                    // FIXME: direct node appending
                     that._container = $('<div></div>');
                     var element = that._view.getElement();
                     element.append(that._container);
@@ -2482,6 +2501,7 @@
                                         Mosaic.ListItemView, resource);
                                 if (view) {
                                     that._addResourceViewToIndex(view);
+                                    // FIXME: direct node appending
                                     that._container.append(view.getElement());
                                     view.render();
                                 }
