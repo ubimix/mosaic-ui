@@ -574,6 +574,9 @@
          */
         Mosaic.DataSet = Mosaic.Class.extend({
 
+            /** Listens to events produced by external objects */
+            listenTo : Mosaic.Mixins.listenTo,
+
             /** Returns a unique identifier of this dataset */
             getId : Mosaic.Mixins.getId,
 
@@ -750,18 +753,64 @@
                 var that = this;
                 that._searchParams = params;
                 params = this.getSearchParams();
+                that.fire('search:updateCriteria', that.newEvent({
+                    params : params
+                }));
                 return Mosaic.Promise().then(function() {
-                    that.fire('search:begin', that.newEvent({
-                        params : params
-                    }));
                     return that._doSearch(params);
-                }).then(function(result) {
-                    that.fire('search:end', that.newEvent({
-                        params : params
-                    }));
-                    return result;
                 });
             },
+
+            /**
+             * This method is used to start search operations with the currently
+             * defined search criteria. It returns a deferred object to resolve
+             * with search results.
+             */
+            runSearch : function() {
+                var that = this;
+                that.stopSearch();
+                var deferred = that._searchDeferred = Mosaic.Promise.defer();
+                that.fire('search:begin', that.newEvent({
+                    params : that._searchParams
+                }));
+                deferred.promise.then(function(results) {
+                    delete that._searchDeferred;
+                    that._setSearchResults(null, results);
+                    that.fire('search:end', that.newEvent({
+                        params : that._searchParams,
+                        result : results
+                    }));
+                }, function(err) {
+                    delete that._searchDeferred;
+                    that._setSearchResults(err);
+                    that.fire('search:end', that.newEvent({
+                        params : that._searchParams,
+                        error : err
+                    }));
+                })
+                return deferred;
+            },
+
+            /**
+             * This method is used to notify about the end of search operations
+             * with the currently defined search criteria.
+             */
+            stopSearch : function() {
+                var that = this;
+                if (that._searchDeferred) {
+                    var err = new Error('Search cancelled.');
+                    that._searchDeferred.reject(err);
+                    delete that._searchDeferred;
+                }
+            },
+
+            /**
+             * This method is used to search results returned by search
+             * operations.
+             */
+            _setSearchResults : function(err, results) {
+            }
+
         });
 
         /* Static methods associated with the Mosaic.DataSet class. */
@@ -952,14 +1001,15 @@
         Mosaic.TilesDataSet = Mosaic.ResourceCollectionDataSet.extend({
             type : 'TilesDataSet',
 
-            _resourceIndex : {},
-
-            /** Updates tiles URLs */
-            _doSearch : function(params) {
+            initialize : function() {
                 var that = this;
-                delete that._tilesUrl;
-                delete that._datagridUrl;
-                return Mosaic.Promise(true);
+                var proto = Mosaic.ResourceCollectionDataSet.prototype;
+                proto.initialize.apply(that, arguments);
+                that.listenTo(that, 'search:updateCriteria', function() {
+                    delete that._tilesUrl;
+                    delete that._datagridUrl;
+                });
+                that._resourceIndex = {};
             },
 
             /** Formats the specified URL by adding search parameters. */
@@ -1035,13 +1085,14 @@
              * This method is used by the map adapter to set a new set of
              * resources loaded by UTFGrid layers.
              */
-            _setLoadedResources : function(index) {
+            _setSearchResults : function(err, index) {
                 var that = this;
+                index = index || [];
                 var added = _.filter(index, function(resource, id) {
                     return !_.has(that._resourceIndex, id);
                 });
-                var removed = _.filter(that._resourceIndex, function(resource,
-                    id) {
+                var removed = _.filter(that._resourceIndex, //
+                function(resource, id) {
                     return !_.has(index, id);
                 });
                 that._resourceIndex = index;
@@ -2665,6 +2716,14 @@
             /** Returns a cache key used to keep loaded tiles. */
             _getKey : function(zoom, point) {
                 return zoom + '-' + point.x + '-' + point.y;
+            },
+
+            /** This method changes the tiles URL */
+            setUrl : function(url, useJsonP) {
+                if (useJsonP !== undefined) {
+                    this.options.useJsonP = !!useJsonP;
+                }
+                this.options.url = url;
             }
 
         });
@@ -2692,6 +2751,13 @@
                 this._loader = this.options.loader
                         || new Mosaic.UtfGrid.Loader(this.options);
             },
+
+            /** Sets a new URL for UTFGrid tiles */
+            setUrl : function(url, useJsonP) {
+                this._loader.setUrl(url, useJsonP);
+                this._update();
+            },
+
             /**
              * This method is called when this layer is added to the map.
              */
@@ -2927,10 +2993,26 @@
 
             /** Initializes this object. */
             initialize : function(options) {
+                var that = this;
                 var proto = Mosaic.DataSetMapAdapter.prototype;
-                proto.initialize.apply(this, arguments);
-                this._setTilesLayerVisibility(true);
-                this._setGridLayerVisibility(true);
+                proto.initialize.apply(that, arguments);
+                that._setTilesLayerVisibility(true);
+                that._setGridLayerVisibility(true);
+            },
+
+            /**
+             * This internal method binds data set event listeners visualizing
+             * resources in popups.
+             */
+            _bindDataEventListeners : function() {
+                var that = this;
+                var proto = Mosaic.DataSetMapAdapter.prototype;
+                proto._bindDataEventListeners.apply(that, arguments);
+                that.listenTo(that._dataSet, 'search:updateCriteria', function(
+                    event) {
+                    that._updateGridLayer();
+                    that._updateTilesLayer();
+                });
             },
 
             /** Returns the visibility status of the tiles layer. */
@@ -3019,6 +3101,10 @@
                     url : utfgridUrl
                 });
                 var that = this;
+                var searchDeferred;
+                layer.on('startLoading', function(e) {
+                    searchDeferred = that._dataSet.runSearch();
+                });
                 layer.on('endLoading', function(e) {
                     var index = {};
                     _.each(e.tiles, function(tile) {
@@ -3028,7 +3114,11 @@
                             index[id] = resource;
                         })
                     })
-                    that._dataSet._setLoadedResources(index);
+                    var d = searchDeferred;
+                    searchDeferred = null;
+                    if (d) {
+                        d.resolve(index);
+                    }
                 });
 
                 // var layer = new L.UtfGrid(utfgridUrl);
@@ -3068,9 +3158,30 @@
                 this._rendered = true;
             },
 
+            /** Updates (reloads) the grid layer */
+            _updateGridLayer : function() {
+                if (!this._gridLayer)
+                    return;
+                var utfgridUrl = this._dataSet.getDataGridUrl();
+                if (!utfgridUrl)
+                    return;
+                this._gridLayer.setUrl(utfgridUrl);
+            },
+
+            /** Updates (reloads) the tiles layer */
+            _updateTilesLayer : function() {
+                if (!this._tilesLayer)
+                    return;
+                var tilesUrl = this._dataSet.getTilesUrl();
+                if (!tilesUrl)
+                    return;
+                this._tilesLayer.setUrl(tilesUrl);
+            },
+
             /* -------------------------- */
             /* Individual event listeners */
 
+            /** This method is called when the dataset recieves an 'show' event */
             _onShow : function(e) {
                 if (e.hideTiles) {
                     this._setTilesLayerVisibility(false);
@@ -3080,6 +3191,7 @@
                 }
             },
 
+            /** This method is called when the dataset recieves an 'hide' event */
             _onHide : function(e) {
                 if (e.showTiles) {
                     this._setTilesLayerVisibility(true);
@@ -3098,7 +3210,7 @@
             },
 
             _onEndSearch : function(e) {
-                this._doRender();
+                // this._doRender();
             },
 
         })
