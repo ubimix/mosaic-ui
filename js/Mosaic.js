@@ -1096,10 +1096,10 @@
                     return !_.has(index, id);
                 });
                 that._resourceIndex = index;
-                if (added.length || removed.length) {
-                    var event = that.newEvent({});
-                    that.fire('update', event);
-                }
+                // if (added.length || removed.length) {
+                // var event = that.newEvent({});
+                // that.fire('update', event);
+                // }
             }
 
         })
@@ -2724,6 +2724,7 @@
                     this.options.useJsonP = !!useJsonP;
                 }
                 this.options.url = url;
+                this._cache = {};
             }
 
         });
@@ -2777,9 +2778,7 @@
                 map.off('click', this._click, this);
                 map.off('mousemove', this._move, this);
                 map.off('moveend', this._update, this);
-                if (this.options.pointerCursor) {
-                    this._container.style.cursor = '';
-                }
+                this._removeMouseCursorStyle();
             },
 
             /** Map click handler */
@@ -2796,15 +2795,11 @@
                             latlng : e.latlng,
                             data : this._mouseOn
                         });
-                        if (this.options.pointerCursor) {
-                            this._container.style.cursor = '';
-                        }
+                        this._removeMouseCursorStyle();
                     }
                     if (on.data) {
                         this.fire('mouseover', on);
-                        if (this.options.pointerCursor) {
-                            this._container.style.cursor = 'pointer';
-                        }
+                        this._setMouseCursorStyle();
                     }
                     this._mouseOn = on.data;
                 } else if (on.data) {
@@ -2830,6 +2825,34 @@
                     latlng : e.latlng,
                     data : result
                 };
+            },
+
+            /**
+             * Checks if the cursor style of the container should be changed to
+             * pointer cursor
+             */
+            _setMouseCursorStyle : function() {
+                if (!this.options.pointerCursor)
+                    return;
+                if (!this._container._utfgridCursor) {
+                    this._container._utfgridCursor = 1;
+                    this._container.style.cursor = 'pointer';
+                } else {
+                    this._container._utfgridCursor++;
+                }
+            },
+
+            /** Removes cursor style from the container */
+            _removeMouseCursorStyle : function() {
+                if (!this.options.pointerCursor)
+                    return;
+                if (this._container._utfgridCursor) {
+                    this._container._utfgridCursor--;
+                    if (this._container._utfgridCursor == 0) {
+                        this._container.style.cursor = '';
+                        delete this._container._utfgridCursor;
+                    }
+                }
             },
 
             /** Re-loads tiles for new map position */
@@ -2861,7 +2884,7 @@
                 }, function(errors) {
                     evt.errors = errors;
                     that.fire('endLoading', evt);
-                });
+                }).done();
             },
 
             /** Calculates order of tiles loading */
