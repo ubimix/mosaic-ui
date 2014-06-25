@@ -287,6 +287,166 @@
         })
 
         /* ------------------------------------------------- */
+
+        /**
+         * Group objects are used to manage exclusive states of a group of
+         * objects.
+         */
+        Mosaic.Group = Mosaic.Class
+                .extend({
+
+                    /** Initializes this class */
+                    initialize : function() {
+                        this.slots = {};
+                    },
+                    /**
+                     * Returns statistics about all items (list of keys for
+                     * active/inactive/undefined items and the total list of
+                     * item keys.
+                     */
+                    getStats : function() {
+                        var result = {
+                            active : [],
+                            inactive : [],
+                            'undefined' : [],
+                            all : _.keys(this.slots)
+                        }
+                        _.each(this.slots, function(slot) {
+                            if (slot.active === undefined) {
+                                result['undefined'].push(slot.key);
+                            } else if (!slot.active) {
+                                result.inactive.push(slot.key);
+                            } else {
+                                result.active.push(slot.key);
+                            }
+                        })
+                        return result;
+                    },
+                    /**
+                     * This internal method changes the state for items with the
+                     * specified keys. If keys are not defined then this method
+                     * changes the state for all items.
+                     */
+                    _changeState : function(eventKey, active, itemKeys) {
+                        var that = this;
+                        var before = that.getStats();
+                        if (!itemKeys.length) {
+                            itemKeys = _.keys(that.slots);
+                        }
+                        var updated = false;
+                        _.each(itemKeys, function(key) {
+                            var slot = that.slots[key];
+                            if (slot.active !== active) {
+                                slot.active = active;
+                                that.fire(eventKey, slot);
+                                updated = true;
+                            }
+                        });
+                        var after = that.getStats();
+                        if (before.all.length != after.all.length
+                                || before.active.length != after.active.length
+                                || before.inactive.length != after.inactive.length
+                                || before['undefined'].length != after['undefined'].length) {
+                            that.fire('update', after);
+                        }
+                    },
+                    /**
+                     * Activates an item with the specified keys. Activates
+                     * everything if no keys are defined.
+                     */
+                    activate : function() {
+                        this._changeState('activate', true, _
+                                .toArray(arguments));
+                    },
+                    /**
+                     * Deactivates an item with the specified keys. Deactivates
+                     * everything if no keys are defined.
+                     */
+                    deactivate : function() {
+                        this._changeState('deactivate', false, _
+                                .toArray(arguments));
+                    },
+                    /**
+                     * Toggle (inverse) the state for items with the specified
+                     * keys. If no keys were specified then this method switches
+                     * the state for all items.
+                     */
+                    toggle : function() {
+                        var keys = _.toArray(arguments);
+                        if (!keys.length) {
+                            keys = _.keys(this.slots);
+                        }
+                        _.each(keys, function(key) {
+                            var slot = this.slots[key];
+                            if (!slot)
+                                return;
+                            if (!slot.active) {
+                                this.activate(key);
+                            } else {
+                                this.deactivate(key);
+                            }
+                        }, this);
+                    },
+                    /**
+                     * Returns an item from the group corresponding to the
+                     * specified key.
+                     */
+                    get : function(key) {
+                        var slot = this.slots[key];
+                        return slot ? slot.item : null;
+                    },
+                    /**
+                     * Returns all items corresponding to the specified keys or
+                     * all items from the group if keys are not defined.
+                     */
+                    getAll : function() {
+                        var keys = _.toArray(arguments);
+                        if (!keys.length) {
+                            return _.values(this.slots);
+                        } else {
+                            return _.map(keys, function(key) {
+                                return this.slots[key];
+                            }, this)
+                        }
+                    },
+                    /**
+                     * Adds all items from the specified dictionary to this
+                     * group.
+                     */
+                    addAll : function(map, active) {
+                        var that = this;
+                        _.each(map, function(value, key) {
+                            that.add(key, value, active);
+                        })
+                    },
+                    /**
+                     * Adds an item corresponding to the specified key to this
+                     * group.
+                     */
+                    add : function(key, item, active) {
+                        this.remove(key);
+                        var slot = this.slots[key] = {
+                            key : key,
+                            item : item,
+                            active : active ? !!active : undefined
+                        };
+                        this.fire('add', slot);
+                    },
+                    /**
+                     * Removes an item corresponding to the specified key from
+                     * this group.
+                     */
+                    remove : function(key) {
+                        var that = this;
+                        var slot = that.slots[key];
+                        if (slot) {
+                            delete that.slots[key];
+                            that.fire('remove', slot);
+                        }
+                    }
+                });
+
+        /* ------------------------------------------------- */
         /* Input/Output utility methods */
         Mosaic.IO = {
 
