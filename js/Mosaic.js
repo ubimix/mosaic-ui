@@ -1378,6 +1378,8 @@
          * Template-based view. It uses HTML templates to represent information.
          */
         Mosaic.TemplateView = Mosaic.Class.extend({
+            /** Name of this type */
+            type : 'TemplateView',
 
             /** Returns a unique identifier of this view. */
             getId : Mosaic.Mixins.getId,
@@ -1649,6 +1651,7 @@
 
         /** A common superclass for all dataset views (Map, List, etc). */
         Mosaic.DataSetView = Mosaic.TemplateView.extend({
+            type : 'DataSetView',
 
             /** Returns an application managing this view */
             getApp : function() {
@@ -1748,6 +1751,7 @@
 
         /** It is a common superclass used to visualize resources. */
         Mosaic.ResourceView = Mosaic.TemplateView.extend({
+            type : 'ResourceView',
             /** Fires an event using the specified method. */
             _fireResourceEvent : function(event, method) {
                 var dataSet = this.getDataSet();
@@ -2042,7 +2046,6 @@
                 this._view = this.options.view;
                 this._dataSet = this.options.dataSet;
                 this._resetViewIndex();
-                this._delegateEventsToViews();
             },
 
             /**
@@ -2059,10 +2062,10 @@
             },
 
             /**
-             * Attaches event listeners to the underlying data set to notify all
-             * managed view about changes with resource states
+             * This internal method binds data set event listeners visualizing
+             * resources in popups.
              */
-            _delegateEventsToViews : function() {
+            _bindDataEventListeners : function() {
                 var that = this;
                 function handler(method, e) {
                     var resource = that._dataSet.getResourceFromEvent(e);
@@ -2072,16 +2075,35 @@
                     }
                     view.triggerMethod(method, e);
                 }
+                that._delegateEventListeners = [];
+                function addHandler(event) {
+                    var m = function(e) {
+                        handler(event, e);
+                    };
+                    that._dataSet.on(event, m);
+                    that._delegateEventListeners.push(function() {
+                        that._dataSet.off(event, m);
+                    })
+                }
                 var resourceStates = Mosaic.DataSet.getResourceStates();
                 _.each(resourceStates, function(conf) {
-                    that.listenTo(that._dataSet, conf.on, function(e) {
-                        handler(conf.on, e);
-                    });
-                    that.listenTo(that._dataSet, conf.off, function(e) {
-                        handler(conf.off, e);
-                    });
+                    addHandler(conf.on);
+                    addHandler(conf.off);
                 });
             },
+
+            /**
+             * This internal method unbinds/removes event listeners from the
+             * underlying data set.
+             */
+            _unbindDataEventListeners : function() {
+                var that = this;
+                _.each(that._delegateEventListeners, function(handler) {
+                    handler();
+                })
+                delete that._delegateEventListeners;
+            },
+
             /**
              * Resets the internal index of views.
              */
@@ -2100,6 +2122,11 @@
                 var resource = view.getResource();
                 var resourceId = this._dataSet.getResourceId(resource);
                 delete this._viewIndex[resourceId];
+            },
+
+            /** Returns a list of all resource views */
+            _getResourceViews : function() {
+                return _.values(this._viewIndex);
             },
 
             /**
@@ -2175,16 +2202,18 @@
          * rendering DataSet objects in views.
          */
         Mosaic.DataSetViewAdapter = Mosaic.ViewAdapter.extend({
-
             /**
              * This internal method binds data set event listeners visualizing
              * resources in popups.
              */
             _bindDataEventListeners : function() {
+                var proto = Mosaic.ViewAdapter.prototype;
+                proto._bindDataEventListeners.apply(this, arguments);
+
                 // Dataset-related events
                 this.listenTo(this._dataSet, 'update', this._onUpdate);
-                this.listenTo(this._dataSet, 'hide', this._onShow);
-                this.listenTo(this._dataSet, 'show', this._onHide);
+                this.listenTo(this._dataSet, 'hide', this._onHide);
+                this.listenTo(this._dataSet, 'show', this._onShow);
                 this.listenTo(this._dataSet, 'search:begin', //
                 this._onBeginSearch);
                 this.listenTo(this._dataSet, 'search:end', //
@@ -2204,6 +2233,8 @@
              * underlying data set.
              */
             _unbindDataEventListeners : function() {
+                var proto = Mosaic.ViewAdapter.prototype;
+                proto._unbindDataEventListeners.apply(this, arguments);
                 // Dataset-related events
                 this.stopListening(this._dataSet, 'update');
                 this.stopListening(this._dataSet, 'refresh');
@@ -2322,6 +2353,7 @@
 
                 /* Creates a view for this resource */
                 var view = that.newResourceView(AdapterType, resource);
+
                 // Exit if there is no visualization defined for the
                 // current resource type
                 if (!view) {
@@ -2694,13 +2726,9 @@
             _doRender : function() {
                 var that = this;
                 if (!that._container) {
-                    // FIXME: direct node appending
-                    that._container = $('<div></div>');
-                    var element = that._view.getElement();
-                    element.append(that._container);
+                    that._container = that._view.getElement();
                 }
-                that._container.html('');
-                that._resetViewIndex();
+                that._doReset();
                 that._beginLoading();
                 that._dataSet.loadResources({}).then(
                         function(cursor) {
@@ -2712,21 +2740,23 @@
                                         Mosaic.ListItemView, resource);
                                 if (view) {
                                     that._addResourceViewToIndex(view);
-                                    // FIXME: direct node appending
                                     that._container.append(view.getElement());
                                     view.render();
                                 }
                             }, that);
                         });
-                that._delegateEventsToViews();
             },
 
             _doReset : function() {
                 var that = this;
+                var views = that._getResourceViews();
+                _.each(views, function(view) {
+                    that._removeResourceViewFromIndex(view);
+                })
                 if (that._container) {
-                    that._container.remove();
-                    delete that._container;
+                    that._container.html('');
                 }
+                that._resetViewIndex();
             },
 
             _onActivateResource : function(e) {
@@ -2741,6 +2771,10 @@
                 that._view.$el.animate({
                     scrollTop : top
                 }, 300);
+            },
+
+            _onEndSearch : function(e) {
+                this._doRender();
             },
 
             _beginLoading : function() {
@@ -2791,7 +2825,6 @@
                             resource);
                     that._view.setResourceView(view);
                 })
-                that._delegateEventsToViews();
             },
             /** Removes all rendered resources from the list. */
             resetView : function() {
@@ -3303,18 +3336,25 @@
                         d.resolve(index);
                     }
                 });
-
+                function toObject(value) {
+                    // FIXME: it should be defined at the server side
+                    if (_.isString(value)) {
+                        try {
+                            value = JSON.parse(value);
+                        } catch (e) {
+                        }
+                    }
+                    return value;
+                }
                 // var layer = new L.UtfGrid(utfgridUrl);
                 this._bindLayerEventListeners(layer, function(e) {
                     var data = e.data;
                     if (!data)
                         return null;
-                    if (_.isString(data.properties)) {
-                        // FIXME: refactor it!
-                        data.properties = JSON.parse(data.properties);
-                        if (!data.properties.type) {
-                            data.properties.type = data.type;
-                        }
+                    data.geometry = toObject(data.geometry);
+                    data.properties = toObject(data.properties);
+                    if (data.properties && !data.properties.type) {
+                        data.properties.type = data.type;
                     }
                     if (_.isString(data.geometry)) {
                         data.geometry = JSON.parse(data.geometry);
@@ -3366,21 +3406,21 @@
 
             /** This method is called when the dataset recieves an 'show' event */
             _onShow : function(e) {
-                if (e.hideTiles) {
-                    this._setTilesLayerVisibility(false);
-                }
-                if (e.hideGrid) {
-                    this._setGridLayerVisibility(false);
-                }
-            },
-
-            /** This method is called when the dataset recieves an 'hide' event */
-            _onHide : function(e) {
                 if (e.showTiles) {
                     this._setTilesLayerVisibility(true);
                 }
                 if (e.showGrid) {
                     this._setGridLayerVisibility(true);
+                }
+            },
+
+            /** This method is called when the dataset recieves an 'hide' event */
+            _onHide : function(e) {
+                if (e.hideTiles) {
+                    this._setTilesLayerVisibility(false);
+                }
+                if (e.hideGrid) {
+                    this._setGridLayerVisibility(false);
                 }
             },
 
