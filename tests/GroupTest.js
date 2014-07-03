@@ -1,7 +1,5 @@
 var expect = chai.expect;
-function checkEql(a, b) {
-    expect('' + a, '' + JSON.stringify(b));
-}
+
 describe("Mosaic.Group", function() {
     it("should be able to add/remove entities and notify about it", function() {
         var group = new Mosaic.Group();
@@ -14,7 +12,6 @@ describe("Mosaic.Group", function() {
             removed.push(ev);
         })
         group.add('abc', 'ABC');
-        console.log(' **', added);
         checkEql(added, [ {
             key : 'abc',
             item : 'ABC',
@@ -34,31 +31,52 @@ describe("Mosaic.Group", function() {
         } ]);
         checkEql(removed, []);
 
-        checkEql(group.get('abc'), 'ABC');
-        checkEql(group.get('cde'), 'CDE');
-        checkEql(group.get('cde1'), null);
-
-        group.remove('abc');
-        checkEql(group.getAllSlots(), [ {
-            key : 'cde',
-            item : 'CDE',
-            active : undefined
-        } ]);
-        checkEql(removed, [ {
-            key : 'abc',
-            item : 'ABC',
-            active : undefined
-        } ]);
-
-        group.remove('cde');
-        checkEql(group.getAllSlots(), []);
-        checkEql(removed, [ {
+        group.add('efg', 'EFG');
+        checkEql(added, [ {
             key : 'abc',
             item : 'ABC',
             active : undefined
         }, {
             key : 'cde',
             item : 'CDE',
+            active : undefined
+        }, {
+            key : 'efg',
+            item : 'EFG',
+            active : undefined
+        } ]);
+
+        checkEql(removed, []);
+        checkEql(group.get('abc'), 'ABC');
+        checkEql(group.get('cde'), 'CDE');
+        checkEql(group.get('efg'), 'EFG');
+        checkEql(group.get('cde1'), null);
+
+        group.remove('cde');
+        checkEql(group.getAllSlots(), [ {
+            key : 'abc',
+            item : 'ABC',
+            active : undefined
+        }, {
+            key : 'efg',
+            item : 'EFG',
+            active : undefined
+        } ]);
+        checkEql(removed, [ {
+            key : 'cde',
+            item : 'CDE',
+            active : undefined
+        } ]);
+
+        group.remove('efg');
+        checkEql(group.getAllSlots(), []);
+        checkEql(removed, [ {
+            key : 'cde',
+            item : 'CDE',
+            active : undefined
+        }, {
+            key : 'efg',
+            item : 'EFG',
             active : undefined
         } ]);
     });
@@ -134,7 +152,6 @@ describe("Mosaic.Group", function() {
         });
 
         group.deactivate();
-        console.log(activated);
         checkEql(activated, [ {
             key : 'abc',
             item : 'ABC',
@@ -166,7 +183,21 @@ describe("Mosaic.Group", function() {
             'inactive' : [ 'abc', 'cde', 'efg' ],
             'all' : [ 'abc', 'cde', 'efg' ]
         });
-
     });
-
 });
+
+function checkEql(a, b) {
+    function toString(x) {
+        var result = '';
+        if (!_.isArray(x))
+            if (x) {
+                result += x;
+            } else {
+                _.each(x, function(el) {
+                    result += el.toString ? el.toString() : el;
+                })
+            }
+        return result;
+    }
+    expect(toString(a)).to.eql(toString(b));
+}

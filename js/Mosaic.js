@@ -237,10 +237,38 @@
              * Returns <code>true</code> if this type is the same as the
              * specified object.
              */
-            function isSameType(obj) {
-                if (!obj || !obj._typeId)
+            function isSameType(type) {
+                if (!type || !type._typeId)
                     return false;
-                return this._typeId == obj._typeId;
+                return this._typeId == type._typeId;
+            }
+
+            /**
+             * Returns <code>true</code> if this type is the same or is a
+             * subclass of the specified type.
+             */
+            function isSubtype(type, includeThis) {
+                if (!type || !type._typeId)
+                    return false;
+                var result = false;
+                for (var t = includeThis ? this : this.parent; // 
+                !result && !!t && t._typeId !== undefined; t = t.parent) {
+                    result = t._typeId == type._typeId;
+                }
+                return result;
+            }
+
+            /** Returns true if this object is an instance of the specified type */
+            function instanceOf(type) {
+                var cls = this['class'];
+                return isSubtype.call(cls, type, true);
+            }
+
+            /** Returns true if the specified object is an instance of this class */
+            function hasInstance(obj) {
+                if (!obj)
+                    return false;
+                return instanceOf.call(obj, this);
             }
 
             var typeCounter = 0;
@@ -252,14 +280,25 @@
                 }
                 Type.extend = extend;
                 Type.isSameType = isSameType;
+                Type.isSubtype = isSubtype;
+                Type.hasInstance = hasInstance;
                 if (this) {
                     copy(Type, this);
                     copy(Type.prototype, this.prototype);
+                    Type.parent = this;
                 }
                 _.each(arguments, function(fields) {
                     copy(Type.prototype, fields);
                 })
+                Type.prototype.instanceOf = instanceOf;
+                Type.prototype['class'] = Type;
+                Type.prototype.getClass = function() {
+                    return Type;
+                };
                 Type._typeId = typeCounter++;
+                Type.toString = function() {
+                    return 'class-' + (Type._typeId) + '';
+                }
                 return Type;
             }
             return newClass();
@@ -294,24 +333,31 @@
          */
         Mosaic.Group = Mosaic.Class.extend({
 
+            /** Listens to events produced by external objects */
+            listenTo : Mosaic.Mixins.listenTo,
+
+            /** Removes all event listeners produced by external objects. */
+            stopListening : Mosaic.Mixins.stopListening,
+
             /** Initializes this class */
             initialize : function(options) {
                 this.options = options || {};
                 this.slots = {};
                 this.top = null;
             },
+
             /**
              * Returns statistics about all items (list of keys for
              * active/inactive/undefined items and the total list of item keys.
              */
             getStats : function() {
+                var that = this;
                 var result = {
                     active : [],
                     inactive : [],
                     all : []
                 }
-                var slot = this.top;
-                while (slot) {
+                that._forEach([], function(slot) {
                     result.all.push(slot.key);
                     if (!slot.active) {
                         if (slot.active !== undefined) {
@@ -320,12 +366,10 @@
                     } else {
                         result.active.push(slot.key);
                     }
-                    slot = slot.next;
-                    if (slot === this.top)
-                        break;
-                }
+                })
                 return result;
             },
+
             /**
              * This internal method changes the state for items with the
              * specified keys. If keys are not defined then this method changes
@@ -338,7 +382,7 @@
                 that._forEach(itemKeys, function(slot) {
                     if (slot && slot.active !== active) {
                         slot.active = active;
-                        that.triggerMethod(eventKey, that._slotToJson(slot));
+                        that.triggerMethod(eventKey, slot);
                         updated = true;
                     }
                 });
@@ -387,8 +431,7 @@
             },
 
             /**
-             * Returns an item from the group corresponding to the specified
-             * key.
+             * Returns an item corresponding to the specified key.
              */
             get : function(key) {
                 var that = this;
@@ -412,7 +455,7 @@
                 var keys = _.toArray(arguments);
                 var results = [];
                 that._forEach(keys, function(slot) {
-                    results.push(that._slotToJson(slot));
+                    results.push(slot);
                 })
                 return results;
             },
@@ -447,6 +490,7 @@
                 var that = this;
                 var prevSlot = that.remove(key);
                 var slot = that.slots[key] = {
+                    group : that,
                     key : key,
                     item : item,
                     active : active ? !!active : undefined,
@@ -477,7 +521,7 @@
                     that.top = slot;
                     slot.next = slot.prev = slot;
                 }
-                that.triggerMethod('add', that._slotToJson(slot));
+                that.triggerMethod('add', slot);
             },
 
             /**
@@ -499,7 +543,7 @@
                         that.top = null;
                     }
                     delete that.slots[key];
-                    that.triggerMethod('remove', that._slotToJson(slot));
+                    that.triggerMethod('remove', slot);
                 }
                 return slot;
             },
@@ -532,12 +576,53 @@
                 }
             },
 
-            /** Converts the specified slot to a JSON object */
-            _slotToJson : function(slot) {
-                return slot;
-            }
-
         });
+
+        /* ------------------------------------------------- */
+
+        /** A tree of groups managing event propagation from children to parents */
+        Mosaic.GroupTree = Mosaic.Group.extend({
+
+            /**
+             * Initializes this class and adds listeners to all newly added
+             * sub-groups.
+             */
+            initialize : function() {
+                var that = this;
+                Mosaic.Group.prototype.initialize.apply(that, arguments);
+                that.subgroups = {};
+                // Adds update listeners to new children
+                that.on('add', function(slot) {
+                    if (!Mosaic.Group.hasInstance(slot.item))
+                        return;
+                    that.subgroups[slot.key] = slot;
+                    that.listenTo(slot.item, 'update', function(stat) {
+                        if (stat.active.length > 0) {
+                            that.activate(slot.key);
+                        } else {
+                            that.deactivate(slot.key);
+                        }
+                    });
+                });
+                // Remove chilren listeners
+                that.on('remove', function(slot) {
+                    if (!Mosaic.Group.hasInstance(slot.item))
+                        return;
+                    delete that.subgroups[slot.key];
+                    that.stopListening(slot.item, 'update');
+                })
+                // Notifies all children when this group is deactivated
+                that.on('update', function(stats) {
+                    var that = this;
+                    if (stats.active.length)
+                        return;
+                    _.each(that.subgroups, function(slot, key) {
+                        slot.item.deactivate();
+                    })
+                })
+            },
+
+        })
 
         /* ------------------------------------------------- */
         /* Input/Output utility methods */
