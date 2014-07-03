@@ -1,10 +1,15 @@
 var expect = chai.expect;
+
+Mosaic.GroupTree = Mosaic.Group.extend({
+
+})
+
 function checkEql(a, b) {
     expect('' + a, '' + JSON.stringify(b));
 }
-describe("Mosaic.Group", function() {
+describe("Mosaic.GroupTree", function() {
     it("should be able to add/remove entities and notify about it", function() {
-        var group = new Mosaic.Group();
+        var group = new Mosaic.GroupTree();
         var added = [];
         var removed = [];
         group.on('add', function(ev) {
@@ -64,7 +69,7 @@ describe("Mosaic.Group", function() {
     });
 
     it("should be able to activate/deactivate entities", function() {
-        var group = new Mosaic.Group();
+        var group = new Mosaic.GroupTree();
         var activated = [];
         var deactivated = [];
         var stats = undefined;

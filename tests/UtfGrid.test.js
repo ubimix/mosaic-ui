@@ -3,7 +3,7 @@ var expect = chai.expect;
 describe('Mosaic.UtfGrid', function() {
     it('Should calculate right order of tiles for loading', function() {
         function test(min, max, control) {
-            var grid = new Mosaic.UtfGrid.MapLayer({});
+            var grid = new Mosaic.MapTiles.UtfGrid({});
             min = grid._newPoint(min);
             max = grid._newPoint(max);
             var queue = grid._getTilesReferencesFromCenterOut(min, max);
@@ -20,7 +20,7 @@ describe('Mosaic.UtfGrid', function() {
     it('Should parse UTFGrid datastructures', function() {
         var tile = getTestTile();
         var resolution = 4;
-        var grid = new Mosaic.UtfGrid.MapLayer({});
+        var grid = new Mosaic.MapTiles.UtfGrid({});
         var y = 0 * resolution; // first line
         var x = 63 * resolution; // last cell
         var data = grid._getTileObject(tile, grid._newPoint(x, y));

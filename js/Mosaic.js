@@ -292,159 +292,252 @@
          * Group objects are used to manage exclusive states of a group of
          * objects.
          */
-        Mosaic.Group = Mosaic.Class
-                .extend({
+        Mosaic.Group = Mosaic.Class.extend({
 
-                    /** Initializes this class */
-                    initialize : function() {
-                        this.slots = {};
-                    },
-                    /**
-                     * Returns statistics about all items (list of keys for
-                     * active/inactive/undefined items and the total list of
-                     * item keys.
-                     */
-                    getStats : function() {
-                        var result = {
-                            active : [],
-                            inactive : [],
-                            'undefined' : [],
-                            all : _.keys(this.slots)
+            /** Initializes this class */
+            initialize : function(options) {
+                this.options = options || {};
+                this.slots = {};
+                this.top = null;
+            },
+            /**
+             * Returns statistics about all items (list of keys for
+             * active/inactive/undefined items and the total list of item keys.
+             */
+            getStats : function() {
+                var result = {
+                    active : [],
+                    inactive : [],
+                    all : []
+                }
+                var slot = this.top;
+                while (slot) {
+                    result.all.push(slot.key);
+                    if (!slot.active) {
+                        if (slot.active !== undefined) {
+                            result.inactive.push(slot.key);
                         }
-                        _.each(this.slots, function(slot) {
-                            if (slot.active === undefined) {
-                                result['undefined'].push(slot.key);
-                            } else if (!slot.active) {
-                                result.inactive.push(slot.key);
-                            } else {
-                                result.active.push(slot.key);
-                            }
-                        })
-                        return result;
-                    },
-                    /**
-                     * This internal method changes the state for items with the
-                     * specified keys. If keys are not defined then this method
-                     * changes the state for all items.
-                     */
-                    _changeState : function(eventKey, active, itemKeys) {
-                        var that = this;
-                        var before = that.getStats();
-                        if (!itemKeys.length) {
-                            itemKeys = _.keys(that.slots);
-                        }
-                        var updated = false;
-                        _.each(itemKeys, function(key) {
-                            var slot = that.slots[key];
-                            if (slot.active !== active) {
-                                slot.active = active;
-                                that.fire(eventKey, slot);
-                                updated = true;
-                            }
-                        });
-                        var after = that.getStats();
-                        if (before.all.length != after.all.length
-                                || before.active.length != after.active.length
-                                || before.inactive.length != after.inactive.length
-                                || before['undefined'].length != after['undefined'].length) {
-                            that.fire('update', after);
-                        }
-                    },
-                    /**
-                     * Activates an item with the specified keys. Activates
-                     * everything if no keys are defined.
-                     */
-                    activate : function() {
-                        this._changeState('activate', true, _
-                                .toArray(arguments));
-                    },
-                    /**
-                     * Deactivates an item with the specified keys. Deactivates
-                     * everything if no keys are defined.
-                     */
-                    deactivate : function() {
-                        this._changeState('deactivate', false, _
-                                .toArray(arguments));
-                    },
-                    /**
-                     * Toggle (inverse) the state for items with the specified
-                     * keys. If no keys were specified then this method switches
-                     * the state for all items.
-                     */
-                    toggle : function() {
-                        var keys = _.toArray(arguments);
-                        if (!keys.length) {
-                            keys = _.keys(this.slots);
-                        }
-                        _.each(keys, function(key) {
-                            var slot = this.slots[key];
-                            if (!slot)
-                                return;
-                            if (!slot.active) {
-                                this.activate(key);
-                            } else {
-                                this.deactivate(key);
-                            }
-                        }, this);
-                    },
-                    /**
-                     * Returns an item from the group corresponding to the
-                     * specified key.
-                     */
-                    get : function(key) {
-                        var slot = this.slots[key];
-                        return slot ? slot.item : null;
-                    },
-                    /**
-                     * Returns all items corresponding to the specified keys or
-                     * all items from the group if keys are not defined.
-                     */
-                    getAll : function() {
-                        var keys = _.toArray(arguments);
-                        if (!keys.length) {
-                            return _.values(this.slots);
-                        } else {
-                            return _.map(keys, function(key) {
-                                return this.slots[key];
-                            }, this)
-                        }
-                    },
-                    /**
-                     * Adds all items from the specified dictionary to this
-                     * group.
-                     */
-                    addAll : function(map, active) {
-                        var that = this;
-                        _.each(map, function(value, key) {
-                            that.add(key, value, active);
-                        })
-                    },
-                    /**
-                     * Adds an item corresponding to the specified key to this
-                     * group.
-                     */
-                    add : function(key, item, active) {
-                        this.remove(key);
-                        var slot = this.slots[key] = {
-                            key : key,
-                            item : item,
-                            active : active ? !!active : undefined
-                        };
-                        this.fire('add', slot);
-                    },
-                    /**
-                     * Removes an item corresponding to the specified key from
-                     * this group.
-                     */
-                    remove : function(key) {
-                        var that = this;
-                        var slot = that.slots[key];
-                        if (slot) {
-                            delete that.slots[key];
-                            that.fire('remove', slot);
-                        }
+                    } else {
+                        result.active.push(slot.key);
+                    }
+                    slot = slot.next;
+                    if (slot === this.top)
+                        break;
+                }
+                return result;
+            },
+            /**
+             * This internal method changes the state for items with the
+             * specified keys. If keys are not defined then this method changes
+             * the state for all items.
+             */
+            _changeState : function(eventKey, active, itemKeys) {
+                var that = this;
+                var updated = false;
+                var before = that.getStats();
+                that._forEach(itemKeys, function(slot) {
+                    if (slot && slot.active !== active) {
+                        slot.active = active;
+                        that.triggerMethod(eventKey, that._slotToJson(slot));
+                        updated = true;
                     }
                 });
+                var after = that.getStats();
+                if (before.all.length != after.all.length
+                        || before.active.length != after.active.length
+                        || before.inactive.length != after.inactive.length) {
+                    that.triggerMethod('update', after, before);
+                }
+            },
+
+            /**
+             * Activates an item with the specified keys. Activates everything
+             * if no keys are defined.
+             */
+            activate : function() {
+                if (this.options.exclusive) {
+                    this.deactivate();
+                }
+                this._changeState('activate', true, _.toArray(arguments));
+            },
+
+            /**
+             * Deactivates an item with the specified keys. Deactivates
+             * everything if no keys are defined.
+             */
+            deactivate : function() {
+                this._changeState('deactivate', false, _.toArray(arguments));
+            },
+
+            /**
+             * Toggle (inverse) the state for items with the specified keys. If
+             * no keys were specified then this method switches the state for
+             * all items.
+             */
+            toggle : function() {
+                var that = this;
+                var keys = _.toArray(arguments);
+                that._forEach(keys, function(slot) {
+                    if (!slot.active) {
+                        that.activate(slot.key);
+                    } else {
+                        that.deactivate(slot.key);
+                    }
+                })
+            },
+
+            /**
+             * Returns an item from the group corresponding to the specified
+             * key.
+             */
+            get : function(key) {
+                var that = this;
+                var slot = that.slots[key];
+                return that._getSlotItem(slot);
+            },
+
+            /**
+             * Returns all items corresponding to the specified keys or all
+             * items from the group if keys are not defined.
+             */
+            getAll : function() {
+                var that = this;
+                var slots = that.getAllSlots.apply(that, arguments);
+                return _.map(slots, that._getSlotItem, that);
+            },
+
+            /** Returns all slots in this group in their internal order. */
+            getAllSlots : function() {
+                var that = this;
+                var keys = _.toArray(arguments);
+                var results = [];
+                that._forEach(keys, function(slot) {
+                    results.push(that._slotToJson(slot));
+                })
+                return results;
+            },
+
+            /**
+             * Returns all key in this group. This method keeps the internal
+             * group order of elements.
+             */
+            getAllKeys : function() {
+                var that = this;
+                var result = [];
+                that._forEach([], function(slot) {
+                    result.push(slot.key);
+                });
+                return result;
+            },
+
+            /**
+             * Adds all items from the specified dictionary to this group.
+             */
+            addAll : function(map, active) {
+                var that = this;
+                _.each(map, function(value, key) {
+                    that.add(key, value, active);
+                })
+            },
+
+            /**
+             * Adds an item corresponding to the specified key to this group.
+             */
+            add : function(key, item, active) {
+                var that = this;
+                var prevSlot = that.remove(key);
+                var slot = that.slots[key] = {
+                    key : key,
+                    item : item,
+                    active : active ? !!active : undefined,
+                    toString : function() {
+                        return JSON.stringify({
+                            key : this.key,
+                            item : this.item,
+                            active : this.active
+                        })
+                    }
+                };
+                var prev;
+                var next;
+                if (prevSlot) {
+                    prev = prevSlot.prev;
+                    next = prevSlot.next;
+                } else if (that.top) {
+                    prev = that.top.prev;
+                    next = that.top;
+                }
+                if (prev && next) {
+                    prev.next = slot;
+                    next.prev = slot;
+                    slot.prev = prev;
+                    slot.next = next;
+                } else {
+                    // top is not defined
+                    that.top = slot;
+                    slot.next = slot.prev = slot;
+                }
+                that.triggerMethod('add', that._slotToJson(slot));
+            },
+
+            /**
+             * Removes an item corresponding to the specified key from this
+             * group.
+             */
+            remove : function(key) {
+                var that = this;
+                var slot = that.slots[key];
+                if (slot) {
+                    var next = slot.next;
+                    var prev = slot.prev;
+                    prev.next = next;
+                    next.prev = prev;
+                    if (that.top === slot) {
+                        that.top = next;
+                    }
+                    if (that.top === slot) {
+                        that.top = null;
+                    }
+                    delete that.slots[key];
+                    that.triggerMethod('remove', that._slotToJson(slot));
+                }
+                return slot;
+            },
+
+            /** Returns an item contained in the specified slot */
+            _getSlotItem : function(slot) {
+                return slot ? slot.item : null;
+            },
+
+            /**
+             * Calls the specified callback for all slots corresponding to the
+             * given keys. If no keys are specified then this method iterates
+             * over all slots.
+             */
+            _forEach : function(keys, callback) {
+                var that = this;
+                if (!keys || !keys.length) {
+                    var slot = that.top;
+                    while (slot) {
+                        callback.call(that, slot);
+                        slot = slot.next;
+                        if (slot == that.top)
+                            break;
+                    }
+                } else {
+                    _.each(keys, function(key) {
+                        var slot = that.slots[key];
+                        callback.call(that, slot);
+                    });
+                }
+            },
+
+            /** Converts the specified slot to a JSON object */
+            _slotToJson : function(slot) {
+                return slot;
+            }
+
+        });
 
         /* ------------------------------------------------- */
         /* Input/Output utility methods */
@@ -2834,8 +2927,7 @@
 
         /* ------------------------------------------------- */
 
-        Mosaic.UtfGrid = {};
-        Mosaic.UtfGrid.Loader = Mosaic.Class.extend({
+        Mosaic.MapTilesLoader = Mosaic.Class.extend({
 
             initialize : function(options) {
                 this.options = options || {};
@@ -2858,9 +2950,9 @@
              * Returns a promise for a set of tiles corresponding to the
              * specified zoom and tile indexes.
              */
-            loadTiles : function(zoom, points, tiles) {
+            loadTiles : function(zoom, points) {
                 var that = this;
-                tiles = tiles || [];
+                var tiles = [];
                 return Mosaic.Promise.all(_.map(points, function(point) {
                     var idx = tiles.length;
                     tiles.push(null);
@@ -2923,33 +3015,164 @@
         });
 
         /**
-         * The code of this class was mostly copied from the leaflet.utfgrid
-         * Leaflet extension (MIT license, by David Leaver). The difference with
-         * the original implementation is that 1) this class delegates tiles
-         * loading/caching/canceling operations to an Mosaic.UtfGrid.Loader
-         * instance; 2) this class notifies about loading of tiles for each new
-         * screen using the "startLoading"/"endLoading" events; 3) it loads
-         * tiles starting from the center of the current screen.
+         * Common superclass for all map layers loading tiles using an external
+         * loader object.
          */
-        Mosaic.UtfGrid.MapLayer = Mosaic.Class.extend({
+        Mosaic.MapTiles = Mosaic.Class.extend({
+
             /** Initializes this layer */
             initialize : function(options) {
                 this.options = options || {};
                 _.defaults(this.options, {
                     minZoom : 0,
                     maxZoom : 25,
-                    tileSize : 256,
-                    resolution : 4,
-                    pointerCursor : true
+                    tileSize : 256
                 })
-                this._loader = this.options.loader
-                        || new Mosaic.UtfGrid.Loader(this.options);
             },
 
             /** Sets a new URL for UTFGrid tiles */
             setUrl : function(url, useJsonP) {
-                this._loader.setUrl(url, useJsonP);
                 this._update();
+            },
+
+            /**
+             * This method is called when this layer is added to the map.
+             */
+            onAdd : function(map) {
+                this._map = map;
+                this._container = this._map._container;
+                this._update();
+            },
+
+            /**
+             * This method is called when this layer is removed from the map.
+             */
+            onRemove : function() {
+            },
+
+            /** Re-loads tiles for new map position */
+            _update : function() {
+                // Check if tiles should be loaded
+                var zoom = this._map.getZoom();
+                var tileSize = this.options.tileSize;
+                if (zoom > this.options.maxZoom //
+                        || zoom < this.options.minZoom) {
+                    return;
+                }
+
+                // Load tiles
+                var bounds = this._map.getPixelBounds();
+                var min = this._getTilePosition(bounds.min);
+                var max = this._getTilePosition(bounds.max);
+                var queue = this._getTilesReferencesFromCenterOut(min, max);
+
+                var evt = {
+                    queue : queue
+                };
+                var that = this;
+                that.fire('startLoading', evt);
+                return that._loadTiles(zoom, queue)//
+                .then(function(tiles) {
+                    evt.tiles = tiles;
+                    that.fire('endLoading', evt);
+                }, function(errors) {
+                    evt.errors = errors;
+                    that.fire('endLoading', evt);
+                }).done();
+            },
+
+            /**
+             * Loads and returns tiles corresponding to points specified in the
+             * 'queue' parameter of this method.
+             */
+            _loadTiles : function(zoom, queue) {
+                return Mosaic.Promise().then(function() {
+                    throw new Error('Not implemented');
+                });
+            },
+
+            /** Calculates order of tiles loading */
+            _getTilesReferencesFromCenterOut : function(min, max) {
+                var queue = [];
+                for (var j = min.y; j <= max.y; j++) {
+                    for (var i = min.x; i <= max.x; i++) {
+                        queue.push(this._newPoint(i, j));
+                    }
+                }
+                if (queue.length) {
+                    var that = this;
+                    var center = this._newPoint((min.x + max.x) / 2,
+                            (min.y + max.y) / 2);
+                    queue.sort(function(a, b) {
+                        var delta = that._distance(a, center)
+                                - that._distance(b, center);
+                        return delta;
+                    });
+                }
+                return queue;
+            },
+
+            /**
+             * Creates and returns a new point object (containing X/Y
+             * coordinates).
+             */
+            _newPoint : function(x, y) {
+                if (x.length) {
+                    y = x[1];
+                    x = x[0];
+                }
+                return {
+                    x : x,
+                    y : y,
+                    toString : function() {
+                        return JSON.stringify(this, null, 2);
+                    }
+                }
+            },
+
+            /**
+             * Calculates distance between two points. This method is used to
+             * calculate order of tiles loading.
+             */
+            _distance : function(a, b) {
+                var x = a.x - b.x;
+                var y = a.y - b.y;
+                return Math.sqrt(x * x + y * y);
+            },
+
+            /**
+             * Returns X/Y coordinates of the tile corresponding to the
+             * specified point on the map
+             */
+            _getTilePosition : function(point) {
+                var tileSize = this.options.tileSize;
+                return this._newPoint(Math.floor(point.x / tileSize), Math
+                        .floor(point.y / tileSize));
+            },
+
+        });
+
+        /**
+         * The code of this class was mostly copied from the leaflet.utfgrid
+         * Leaflet extension (MIT license, by David Leaver). The difference with
+         * the original implementation is that 1) this class delegates tiles
+         * loading/caching/canceling operations to an Mosaic.MapTilesLoader
+         * instance; 2) this class notifies about loading of tiles for each new
+         * screen using the "startLoading"/"endLoading" events; 3) it loads
+         * tiles starting from the center of the current screen.
+         */
+        Mosaic.MapTiles.UtfGrid = Mosaic.MapTiles.extend({
+
+            /** Initializes this layer */
+            initialize : function(options) {
+                var parent = Mosaic.MapTiles.prototype;
+                parent.initialize.call(this, options);
+                _.defaults(this.options, {
+                    resolution : 4,
+                    pointerCursor : true
+                })
+                this._loader = this.options.loader
+                        || new Mosaic.MapTilesLoader(this.options);
             },
 
             /**
@@ -2963,6 +3186,7 @@
                 map.on('mousemove', this._move, this);
                 map.on('moveend', this._update, this);
             },
+
             /**
              * This method is called when this layer is removed from the map.
              */
@@ -2972,6 +3196,20 @@
                 map.off('mousemove', this._move, this);
                 map.off('moveend', this._update, this);
                 this._removeMouseCursorStyle();
+            },
+
+            /** Sets a new URL for UTFGrid tiles */
+            setUrl : function(url, useJsonP) {
+                this._loader.setUrl(url, useJsonP);
+                this._update();
+            },
+
+            /**
+             * Loads and returns tiles corresponding to points specified in the
+             * 'queue' parameter of this method.
+             */
+            _loadTiles : function(zoom, queue) {
+                return this._loader.loadTiles(zoom, queue);
             },
 
             /** Map click handler */
@@ -3048,77 +3286,6 @@
                 }
             },
 
-            /** Re-loads tiles for new map position */
-            _update : function() {
-                // Check if tiles should be loaded
-                var zoom = this._map.getZoom();
-                var tileSize = this.options.tileSize;
-                if (zoom > this.options.maxZoom //
-                        || zoom < this.options.minZoom) {
-                    return;
-                }
-
-                // Load tiles
-                var bounds = this._map.getPixelBounds();
-                var min = this._getTilePosition(bounds.min);
-                var max = this._getTilePosition(bounds.max);
-                var queue = this._getTilesReferencesFromCenterOut(min, max);
-
-                var tiles = [];
-                var evt = {
-                    queue : queue,
-                    tiles : tiles
-                };
-                var that = this;
-                that.fire('startLoading', evt);
-                that._loader.loadTiles(zoom, queue, tiles) //
-                .then(function(tiles) {
-                    that.fire('endLoading', evt);
-                }, function(errors) {
-                    evt.errors = errors;
-                    that.fire('endLoading', evt);
-                }).done();
-            },
-
-            /** Calculates order of tiles loading */
-            _getTilesReferencesFromCenterOut : function(min, max) {
-                var queue = [];
-                for (var j = min.y; j <= max.y; j++) {
-                    for (var i = min.x; i <= max.x; i++) {
-                        queue.push(this._newPoint(i, j));
-                    }
-                }
-                if (queue.length) {
-                    var that = this;
-                    var center = this._newPoint((min.x + max.x) / 2,
-                            (min.y + max.y) / 2);
-                    queue.sort(function(a, b) {
-                        var delta = that._distance(a, center)
-                                - that._distance(b, center);
-                        return delta;
-                    });
-                }
-                return queue;
-            },
-
-            /**
-             * Creates and returns a new point object (containing X/Y
-             * coordinates).
-             */
-            _newPoint : function(x, y) {
-                if (x.length) {
-                    y = x[1];
-                    x = x[0];
-                }
-                return {
-                    x : x,
-                    y : y,
-                    toString : function() {
-                        return JSON.stringify(this, null, 2);
-                    }
-                }
-            },
-
             /**
              * Returns an object from the specified tile corresponding to the
              * given position.
@@ -3155,26 +3322,6 @@
                             };
                 }
                 return this._processDataF(data);
-            },
-
-            /**
-             * Calculates distance between two points. This method is used to
-             * calculate order of tiles loading.
-             */
-            _distance : function(a, b) {
-                var x = a.x - b.x;
-                var y = a.y - b.y;
-                return Math.sqrt(x * x + y * y);
-            },
-
-            /**
-             * Returns X/Y coordinates of the tile corresponding to the
-             * specified point on the map
-             */
-            _getTilePosition : function(point) {
-                var tileSize = this.options.tileSize;
-                return this._newPoint(Math.floor(point.x / tileSize), Math
-                        .floor(point.y / tileSize));
             },
 
             /**
@@ -3290,11 +3437,46 @@
                 var attribution = this._dataSet.getAttribution();
                 var zIndex = this._getZIndex();
                 var maxZoom = this._view.getMaxZoom();
-                var layer = L.tileLayer(tilesUrl, {
-                    attribution : attribution,
-                    maxZoom : maxZoom,
-                    zIndex : zIndex
-                });
+
+                var layer = newImageTileLayer();
+                // var layer = newCanvasTileLayer();
+
+                function newImageTileLayer() {
+                    var layer = L.tileLayer(tilesUrl, {
+                        attribution : attribution,
+                        maxZoom : maxZoom,
+                        zIndex : zIndex
+                    });
+                    return layer;
+                }
+                function newCanvasTileLayer() {
+                    var layer = new L.TileLayer.Canvas({
+                        url : tilesUrl,
+                        attribution : attribution,
+                        maxZoom : maxZoom,
+                        zIndex : zIndex
+                    });
+                    layer.drawTile = function(canvas, tilePoint, zoom) {
+                        var url = L.Util.template(this.options.url, L.extend({
+                            s : this._getSubdomain(tilePoint),
+                            z : zoom,
+                            x : tilePoint.x,
+                            y : tilePoint.y
+                        }, this.options));
+                        var context = canvas.getContext('2d');
+                        var imageObj = new Image();
+                        imageObj.onload = function() {
+                            context.drawImage(imageObj, 0, 0);
+                        };
+                        imageObj.src = url;
+                    }
+                    layer._redrawTile = function(tile) {
+                        if (!this._map)
+                            return;
+                        this.drawTile(tile, tile._tilePoint, this._map._zoom);
+                    }
+                    return layer;
+                }
                 this._tilesLayer = layer;
                 this._setTilesLayerVisibility(this.isTilesLayerVisible());
             },
@@ -3313,7 +3495,7 @@
                 var utfgridUrl = this._dataSet.getDataGridUrl();
                 if (!utfgridUrl)
                     return;
-                var layer = new Mosaic.UtfGrid.MapLayer({
+                var layer = new Mosaic.MapTiles.UtfGrid({
                     url : utfgridUrl
                 });
                 var that = this;
