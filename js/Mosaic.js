@@ -377,19 +377,19 @@
              */
             _changeState : function(eventKey, active, itemKeys) {
                 var that = this;
-                var updated = false;
-                var before = that.getStats();
+                var updated = [];
                 that._forEach(itemKeys, function(slot) {
                     if (slot && slot.active !== active) {
-                        slot.active = active;
-                        that.triggerMethod(eventKey, slot);
-                        updated = true;
+                        updated.push(slot);
                     }
                 });
-                var after = that.getStats();
-                if (before.all.length != after.all.length
-                        || before.active.length != after.active.length
-                        || before.inactive.length != after.inactive.length) {
+                if (updated.length) {
+                    var before = that.getStats();
+                    _.each(updated, function(slot) {
+                        slot.active = active;
+                        that.triggerMethod(eventKey, slot);
+                    })
+                    var after = that.getStats();
                     that.triggerMethod('update', after, before);
                 }
             },
@@ -563,15 +563,16 @@
                 if (!keys || !keys.length) {
                     var slot = that.top;
                     while (slot) {
-                        callback.call(that, slot);
+                        if (callback.call(that, slot) === false)
+                            break;
                         slot = slot.next;
                         if (slot == that.top)
                             break;
                     }
                 } else {
-                    _.each(keys, function(key) {
+                    _.find(keys, function(key) {
                         var slot = that.slots[key];
-                        callback.call(that, slot);
+                        return callback.call(that, slot) !== false;
                     });
                 }
             },
@@ -593,7 +594,7 @@
                 that.subgroups = {};
                 // Adds update listeners to new children
                 that.on('add', function(slot) {
-                    if (!Mosaic.Group.hasInstance(slot.item))
+                    if (!that._isSubtree(slot))
                         return;
                     that.subgroups[slot.key] = slot;
                     that.listenTo(slot.item, 'update', function(stat) {
@@ -606,7 +607,7 @@
                 });
                 // Remove chilren listeners
                 that.on('remove', function(slot) {
-                    if (!Mosaic.Group.hasInstance(slot.item))
+                    if (!that._isSubtree(slot))
                         return;
                     delete that.subgroups[slot.key];
                     that.stopListening(slot.item, 'update');
@@ -621,6 +622,39 @@
                     })
                 })
             },
+
+            /** Returns true if the specified slot corresponds to a sub-tree. */
+            _isSubtree : function(slot) {
+                return Mosaic.Group.hasInstance(slot.item);
+            },
+
+            /**
+             * Finds and returns first item in this group or in a sub-group
+             * corresponding to the specified key.
+             */
+            findItem : function(key) {
+                var that = this;
+                var slot = that._findSlot(key);
+                return that._getSlotItem(slot);
+            },
+
+            /**
+             * Finds and returns first slot in this group or in a sub-group
+             * corresponding to the specified key.
+             */
+            _findSlot : function(key) {
+                var that = this;
+                var slot = that.slots[key];
+                if (!slot) {
+                    that._forEach([], function(s) {
+                        if (that._isSubtree(s)) {
+                            slot = s.item._findSlot(key);
+                        }
+                        return !slot;
+                    })
+                }
+                return slot;
+            }
 
         })
 
