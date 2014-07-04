@@ -340,8 +340,8 @@
 
             /** Initializes this class */
             initialize : function(options) {
-                this.options = options || {};
-                this.children = {};
+                this.setOptions(options);
+                this._children = {};
             },
 
             /** Returns a parent for this node. */
@@ -355,18 +355,27 @@
             },
 
             /**
+             * Adds the specified subnode to this tree node.
+             */
+            add : function(key, node) {
+                var that = this;
+                that.remove(key);
+                node.parent = this;
+                that._children[key] = node;
+                node._notify('add', {});
+            },
+
+            /**
              * Returns an child tree node corresponding to the specified key. If
              * there is no such a sub-node and the flag "create" is true then a
              * new subnode is created.
              */
             get : function(key, create) {
                 var that = this;
-                var result = that.children[key];
+                var result = that._children[key];
                 if (!result && create) {
                     result = that._newChild(key);
-                    result.parent = this;
-                    that.children[key] = result;
-                    result._notify('add', {});
+                    that.add(key, result);
                 }
                 return result;
             },
@@ -391,7 +400,7 @@
              */
             getAllKeys : function() {
                 var that = this;
-                return _.keys(that.children);
+                return _.keys(that._children);
             },
 
             /** Returns true if this node is a parent of the specified tree node. */
@@ -432,10 +441,10 @@
              */
             remove : function(key) {
                 var that = this;
-                var child = that.children[key];
+                var child = that._children[key];
                 if (child) {
                     child._notify('remove', {});
-                    delete that.children[key];
+                    delete that._children[key];
                 }
                 return child;
             },
@@ -450,7 +459,7 @@
                     visit = visitor.before(that) !== false;
                 }
                 if (visit) {
-                    _.each(that.children, function(child) {
+                    _.each(that._children, function(child) {
                         child.visit(visitor);
                     })
                 }
@@ -474,10 +483,10 @@
                 }
                 var that = this;
                 if (!keys || !keys.length) {
-                    _.find(that.children, visit);
+                    _.find(that._children, visit);
                 } else {
                     _.find(keys, function(key) {
-                        var child = that.children[key];
+                        var child = that._children[key];
                         return visit(child, key);
                     })
                 }
@@ -492,6 +501,8 @@
                 event.node = node;
                 while (node) {
                     node.triggerMethod(eventKey, event);
+                    if (event.stopPropagation)
+                        break;
                     node = node.getParent();
                 }
             },
@@ -532,16 +543,15 @@
              * Returns a "status" of this tree node. Status value reflects the
              * state of this node which depends on the usage of this tree.
              */
-            setStatus : function(status) {
+            setStatus : function(status, options) {
                 var prevStatus = this._status;
                 var updated = prevStatus != status;
-                if (updated) {
+                if (updated || options && options.force) {
                     this._status = status;
-                    this._notify('status', {
+                    this._notify('status', _.extend({}, options, {
                         prevStatus : prevStatus
-                    });
+                    }));
                 }
-                return this._status || '';
             },
 
             /** Returns true if this node is active */
@@ -552,15 +562,15 @@
             /**
              * Activates this node.
              */
-            activate : function() {
-                this.setStatus('active');
+            activate : function(options) {
+                this.setStatus('active', options);
             },
 
             /**
              * Deactivates this node.
              */
-            deactivate : function() {
-                this.setStatus('inactive');
+            deactivate : function(options) {
+                this.setStatus('inactive', options);
             },
 
             /**
@@ -589,15 +599,26 @@
              */
             onStatus : function(evt) {
                 var that = this;
-                if (evt.node != that && evt.node.isActive()) {
-                    if (that.options.exclusive !== false) {
-                        that._forEach([], function(child) {
-                            if (!child.isParentOf(evt.node, true)) {
-                                child.deactivate();
-                            }
-                        })
+                if (evt.node != that) {
+                    if (evt.node.isActive()) {
+                        if (that.options.exclusive !== false) {
+                            that._forEach([], function(child) {
+                                if (!child.isParentOf(evt.node, true)) {
+                                    child.deactivate();
+                                }
+                            })
+                        }
+                        that.activate();
                     }
-                    that.activate();
+                } else if (!evt.internal && !that.isActive()
+                        && that.options.deactivateAll) {
+                    that.visit({
+                        after : function(child) {
+                            child.deactivate({
+                                internal : true
+                            });
+                        }
+                    })
                 }
             },
 
@@ -619,7 +640,7 @@
 
             /** Initializes this class */
             initialize : function(options) {
-                this.options = options || {};
+                this.setOptions(options);
                 this.slots = {};
                 this.top = null;
             },
@@ -856,85 +877,6 @@
             },
 
         });
-
-        /* ------------------------------------------------- */
-
-        /** A tree of groups managing event propagation from children to parents */
-        Mosaic.GroupTree = Mosaic.Group.extend({
-
-            /**
-             * Initializes this class and adds listeners to all newly added
-             * sub-groups.
-             */
-            initialize : function() {
-                var that = this;
-                Mosaic.Group.prototype.initialize.apply(that, arguments);
-                that.subgroups = {};
-                // Adds update listeners to new children
-                that.on('add', function(slot) {
-                    if (!that._isSubtree(slot))
-                        return;
-                    that.subgroups[slot.key] = slot;
-                    that.listenTo(slot.item, 'update', function(stat) {
-                        if (stat.active.length > 0) {
-                            that.activate(slot.key);
-                        } else {
-                            that.deactivate(slot.key);
-                        }
-                    });
-                });
-                // Remove chilren listeners
-                that.on('remove', function(slot) {
-                    if (!that._isSubtree(slot))
-                        return;
-                    delete that.subgroups[slot.key];
-                    that.stopListening(slot.item, 'update');
-                })
-                // Notifies all children when this group is deactivated
-                that.on('update', function(stats) {
-                    var that = this;
-                    if (stats.active.length)
-                        return;
-                    _.each(that.subgroups, function(slot, key) {
-                        slot.item.deactivate();
-                    })
-                })
-            },
-
-            /** Returns true if the specified slot corresponds to a sub-tree. */
-            _isSubtree : function(slot) {
-                return Mosaic.Group.hasInstance(slot.item);
-            },
-
-            /**
-             * Finds and returns first item in this group or in a sub-group
-             * corresponding to the specified key.
-             */
-            findItem : function(key) {
-                var that = this;
-                var slot = that._findSlot(key);
-                return that._getSlotItem(slot);
-            },
-
-            /**
-             * Finds and returns first slot in this group or in a sub-group
-             * corresponding to the specified key.
-             */
-            _findSlot : function(key) {
-                var that = this;
-                var slot = that.slots[key];
-                if (!slot) {
-                    that._forEach([], function(s) {
-                        if (that._isSubtree(s)) {
-                            slot = s.item._findSlot(key);
-                        }
-                        return !slot;
-                    })
-                }
-                return slot;
-            }
-
-        })
 
         /* ------------------------------------------------- */
         /* Input/Output utility methods */
@@ -1527,7 +1469,7 @@
              * covered by this cursor.
              */
             initialize : function(options) {
-                this.options = options || {};
+                this.setOptions(options);
             },
             /** Returns the total number of elements covered by this cursor. */
             getFullLength : function() {
@@ -2287,7 +2229,7 @@
 
             /** Initializes this object */
             initialize : function(options) {
-                this.options = options;
+                this.setOptions(options);
             },
 
             /**
@@ -2532,7 +2474,7 @@
             listenTo : Mosaic.Mixins.listenTo,
 
             initialize : function(options) {
-                this.options = options || {};
+                this.setOptions(options);
                 this._view = this.options.view;
                 this._dataSet = this.options.dataSet;
                 this._resetViewIndex();
@@ -3327,7 +3269,7 @@
         Mosaic.MapTilesLoader = Mosaic.Class.extend({
 
             initialize : function(options) {
-                this.options = options || {};
+                this.setOptions(options);
                 if (this.options.useJsonP == undefined) {
                     this.options.useJsonP = true;
                 }
@@ -3419,7 +3361,7 @@
 
             /** Initializes this layer */
             initialize : function(options) {
-                this.options = options || {};
+                this.setOptions(options);
                 _.defaults(this.options, {
                     minZoom : 0,
                     maxZoom : 25,
@@ -4109,7 +4051,7 @@
              * datasets, activates all view panels, etc
              */
             initialize : function(options) {
-                this.options = options || {};
+                this.setOptions(options);
                 this.app = new Mosaic.App();
                 this._initTemplates();
                 this._initDataSets();

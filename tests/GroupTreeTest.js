@@ -3,7 +3,14 @@ var expect = chai.expect;
 describe('Mosaic.GroupTree', function() {
 
     var TestNode = Mosaic.TreeNode.extend(Mosaic.TreeNodeStatusMixin)
-    var TestNodeExclusive = TestNode.extend({});
+    var TestNodeExclusive = TestNode.extend({
+        initialize : function() {
+            TestNode.prototype.initialize.apply(this, arguments);
+            this.setOptions({
+                deactivateAll : true
+            });
+        }
+    });
 
     it('should be able to find a sub-nodes by their keys', function() {
         var tree = createTree(TestNode);
@@ -55,7 +62,7 @@ describe('Mosaic.GroupTree', function() {
     });
 
     it('should be able to active just one node at time', function() {
-        var tree = createTree(TestNodeExclusive);
+        var tree = createTree(TestNode);
         var item_1_4 = tree.find('item1.4');
         var item_1_4_1 = tree.find('item1.4.1');
         var item_1_4_2 = tree.find('item1.4.2');
@@ -96,6 +103,66 @@ describe('Mosaic.GroupTree', function() {
         expect(item_1_2_2.getStatus()).to.eql('inactive');
     });
 
+    it('test1 - should be able to deactivate all subnodes', function() {
+        var tree = createTree(TestNodeExclusive);
+        var item_1_4_1 = tree.find('item1.4.1');
+        var item_1_2_1 = tree.find('item1.2.1');
+
+        item_1_4_1.setStatus('active');
+        expect(item_1_4_1.getStatus()).to.eql('active');
+        expect(item_1_2_1.getStatus()).to.eql('inactive');
+
+        item_1_2_1.setStatus('active');
+        expect(item_1_4_1.getStatus()).to.eql('inactive');
+        expect(item_1_2_1.getStatus()).to.eql('active');
+    });
+
+    it('test2 - should be able to deactivate all subnodes', function() {
+        var tree = newTree(TestNodeExclusive, {
+            'A' : {}, //
+            'B' : {}, // 
+            'C' : {}, //
+            'D' : { // 
+                'E' : { // 
+                    'F' : {}, // 
+                    'G' : {}, // 
+                    'H' : {}, // 
+                    'I' : {}, // 
+                    'J' : {}
+                },
+                'K' : { // 
+                    'L' : {}, // 
+                    'M' : {}, // 
+                    'N' : {}, // 
+                    'O' : {}, //
+                }
+            }
+        });
+        // 
+        expect(tree.find('L').isActive()).to.eql(false);
+        expect(tree.find('N').isActive()).to.eql(false);
+        expect(tree.find('K').isActive()).to.eql(false);
+        expect(tree.find('D').isActive()).to.eql(false);
+        expect(tree.isActive()).to.eql(false);
+        tree.find('N').activate();
+        expect(tree.find('L').isActive()).to.eql(false);
+        expect(tree.find('N').isActive()).to.eql(true);
+        expect(tree.find('K').isActive()).to.eql(true);
+        expect(tree.find('D').isActive()).to.eql(true);
+        expect(tree.isActive()).to.eql(true);
+
+        var list = [];
+        tree.on('status', function(evt) {
+            list.push(evt.node.getKey());
+        });
+        // printTreeNode(tree);
+        tree.deactivate({
+            force : true
+        });
+        // printTreeNode(tree);
+        expect(list).to.eql([ 'root', 'N', 'K', 'D' ]);
+    });
+
 });
 
 function createTree(Type) {
@@ -119,7 +186,9 @@ function createTree(Type) {
     });
 }
 function newTree(Type, obj) {
-    var tree = new Type({});
+    var tree = new Type({
+        key : 'root'
+    });
     addChildren(tree, obj);
     return tree;
 }
@@ -129,6 +198,26 @@ function addChildren(node, obj) {
         child.value = value;
         if (_.isObject(value)) {
             addChildren(child, value);
+        }
+    })
+}
+function printTreeNode(root) {
+    root.visit({
+        print : function(node, msg) {
+            var n = node;
+            var str = '';
+            while (n) {
+                str += '  ';
+                n = n.getParent();
+            }
+            console.log(str + msg);
+        },
+        before : function(node) {
+            this.print(node, '<' + node.getKey() + ' status="' + node._status
+                    + '">');
+        },
+        after : function(node) {
+            this.print(node, '</' + node.getKey() + '>');
         }
     })
 }
