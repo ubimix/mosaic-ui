@@ -328,6 +328,284 @@
         /* ------------------------------------------------- */
 
         /**
+         * Tree structure.
+         */
+        Mosaic.TreeNode = Mosaic.Class.extend({
+
+            /** Listens to events produced by external objects */
+            listenTo : Mosaic.Mixins.listenTo,
+
+            /** Removes all event listeners produced by external objects. */
+            stopListening : Mosaic.Mixins.stopListening,
+
+            /** Initializes this class */
+            initialize : function(options) {
+                this.options = options || {};
+                this.children = {};
+            },
+
+            /** Returns a parent for this node. */
+            getParent : function() {
+                return this.parent;
+            },
+
+            /** Returns a key associated with this tree node */
+            getKey : function() {
+                return this.options.key;
+            },
+
+            /**
+             * Returns an child tree node corresponding to the specified key. If
+             * there is no such a sub-node and the flag "create" is true then a
+             * new subnode is created.
+             */
+            get : function(key, create) {
+                var that = this;
+                var result = that.children[key];
+                if (!result && create) {
+                    result = that._newChild(key);
+                    result.parent = this;
+                    that.children[key] = result;
+                    result._notify('add', {});
+                }
+                return result;
+            },
+
+            /**
+             * Returns all child nodes corresponding to the specified keys or
+             * all children if keys are not defined.
+             */
+            getAll : function() {
+                var that = this;
+                var keys = _.toArray(arguments);
+                var results = [];
+                that._forEach(keys, function(child) {
+                    results.push(child);
+                })
+                return results;
+            },
+
+            /**
+             * Returns keys of all children of this tree node. This method keeps
+             * the internal order of elements.
+             */
+            getAllKeys : function() {
+                var that = this;
+                return _.keys(that.children);
+            },
+
+            /** Returns true if this node is a parent of the specified tree node. */
+            isParentOf : function(node, includeThis) {
+                var n = includeThis !== false ? node : node.getParent();
+                var result = false;
+                while (n) {
+                    result = (n === this);
+                    if (result)
+                        break;
+                    n = n.getParent();
+                }
+                return result;
+            },
+
+            /**
+             * Finds and returns a child in this node or in a sub-nodes
+             * corresponding to the specified key.
+             */
+            find : function(key) {
+                var that = this;
+                var thisKey = that.getKey();
+                var result;
+                if (key == thisKey) {
+                    result = that;
+                } else {
+                    that._forEach([], function(child) {
+                        result = child.find(key);
+                        return !result;
+                    });
+                }
+                return result;
+            },
+
+            /**
+             * Removes an item corresponding to the specified key from this
+             * group.
+             */
+            remove : function(key) {
+                var that = this;
+                var child = that.children[key];
+                if (child) {
+                    child._notify('remove', {});
+                    delete that.children[key];
+                }
+                return child;
+            },
+
+            /**
+             * Calls the specified callback for all nodes.
+             */
+            visit : function(visitor) {
+                var that = this;
+                var visit = true;
+                if (_.isFunction(visitor.before)) {
+                    visit = visitor.before(that) !== false;
+                }
+                if (visit) {
+                    _.each(that.children, function(child) {
+                        child.visit(visitor);
+                    })
+                }
+                if (_.isFunction(visitor.after)) {
+                    visitor.after(that);
+                }
+            },
+
+            /**
+             * Calls the specified callback for all slots corresponding to the
+             * given keys. If no keys are specified then this method iterates
+             * over all slots.
+             */
+            _forEach : function(keys, callback) {
+                function visit(child, key) {
+                    var stop = false;
+                    if (child) {
+                        stop = callback.call(that, child, key) === false;
+                    }
+                    return stop;
+                }
+                var that = this;
+                if (!keys || !keys.length) {
+                    _.find(that.children, visit);
+                } else {
+                    _.find(keys, function(key) {
+                        var child = that.children[key];
+                        return visit(child, key);
+                    })
+                }
+            },
+
+            /**
+             * Notifies all listeners of this node and all parent nodes about
+             * the specified event.
+             */
+            _notify : function(eventKey, event) {
+                var node = this;
+                event.node = node;
+                while (node) {
+                    node.triggerMethod(eventKey, event);
+                    node = node.getParent();
+                }
+            },
+
+            /**
+             * Creates and returns a new tree node corresponding to the
+             * specified key
+             */
+            _newChild : function(key) {
+                var Type = this.getClass();
+                return new Type({
+                    key : key
+                });
+            },
+
+        })
+
+        /* -------------------------------------------------------------- */
+
+        /**
+         * This mixin is used to add status management for Mosaic.TreeNode
+         * instances.
+         */
+        Mosaic.TreeNodeStatusMixin = {
+
+            /** Defaults status value */
+            _status : 'inactive',
+
+            /**
+             * Returns a "status" of this tree node. Status value reflects the
+             * state of this node which depends on the usage of this tree.
+             */
+            getStatus : function() {
+                return this._status || '';
+            },
+
+            /**
+             * Returns a "status" of this tree node. Status value reflects the
+             * state of this node which depends on the usage of this tree.
+             */
+            setStatus : function(status) {
+                var prevStatus = this._status;
+                var updated = prevStatus != status;
+                if (updated) {
+                    this._status = status;
+                    this._notify('status', {
+                        prevStatus : prevStatus
+                    });
+                }
+                return this._status || '';
+            },
+
+            /** Returns true if this node is active */
+            isActive : function() {
+                return this._status == 'active';
+            },
+
+            /**
+             * Activates this node.
+             */
+            activate : function() {
+                this.setStatus('active');
+            },
+
+            /**
+             * Deactivates this node.
+             */
+            deactivate : function() {
+                this.setStatus('inactive');
+            },
+
+            /**
+             * Returns statistics about all states of child items. The returned
+             * object maps status to lists of child node keys.
+             */
+            getStats : function() {
+                var that = this;
+                var result = {
+                    all : []
+                }
+                that._forEach([], function(child) {
+                    var key = child.getKey();
+                    result.all.push(key);
+                    var status = child.getStatus();
+                    var array = result[status] = result[status] || [];
+                    array.push(key);
+                })
+                return result;
+            },
+
+            /**
+             * This method is notified when the status of a child node is
+             * changed. It checks this tree node is in the exclusive mode and in
+             * this case deactivates all other nodes.
+             */
+            onStatus : function(evt) {
+                var that = this;
+                if (evt.node != that && evt.node.isActive()) {
+                    if (that.options.exclusive !== false) {
+                        that._forEach([], function(child) {
+                            if (!child.isParentOf(evt.node, true)) {
+                                child.deactivate();
+                            }
+                        })
+                    }
+                    that.activate();
+                }
+            },
+
+        };
+
+        /* ------------------------------------------------- */
+
+        /**
          * Group objects are used to manage exclusive states of a group of
          * objects.
          */
