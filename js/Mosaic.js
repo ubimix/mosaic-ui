@@ -403,7 +403,9 @@
                 return _.keys(that._children);
             },
 
-            /** Returns true if this node is a parent of the specified tree node. */
+            /**
+             * Returns true if this node is a parent of the specified tree node.
+             */
             isParentOf : function(node, includeThis) {
                 var n = includeThis !== false ? node : node.getParent();
                 var result = false;
@@ -474,20 +476,27 @@
              * over all slots.
              */
             _forEach : function(keys, callback) {
-                function visit(child, key) {
+                var index = 0;
+                function visit(child) {
                     var stop = false;
                     if (child) {
-                        stop = callback.call(that, child, key) === false;
+                        var cont = callback.call(that, child, index);
+                        stop = (cont === false);
                     }
+                    index++;
                     return stop;
                 }
                 var that = this;
+                if (_.isFunction(keys)) {
+                    callback = keys;
+                    keys = [];
+                }
                 if (!keys || !keys.length) {
                     _.find(that._children, visit);
                 } else {
                     _.find(keys, function(key) {
                         var child = that._children[key];
-                        return visit(child, key);
+                        return visit(child);
                     })
                 }
             },
@@ -597,31 +606,86 @@
              * changed. It checks this tree node is in the exclusive mode and in
              * this case deactivates all other nodes.
              */
-            onStatus : function(evt) {
-                var that = this;
-                if (evt.node != that) {
-                    if (evt.node.isActive()) {
-                        if (that.options.exclusive !== false) {
-                            that._forEach([], function(child) {
-                                if (!child.isParentOf(evt.node, true)) {
-                                    child.deactivate();
+            onStatus : (function() {
+                // Returns a new event with a flag that this is an "internal"
+                // event fired by this method; This flag is used to avoid
+                // infinite event loops.
+                function newEvent() {
+                    return {
+                        internal : true
+                    };
+                }
+                // Activates all node before and deactivates after already
+                // active subnode
+                function activateBefore(child, stage) {
+                    if (stage == 'before') {
+                        child.activate(newEvent());
+                    } else if (stage == 'after') {
+                        child.deactivate(newEvent());
+                    }
+                }
+                // Deactivates all node before and deactivates after already
+                // active subnode
+                function activateAfter(child, stage) {
+                    if (stage == 'before') {
+                        child.deactivate(newEvent());
+                    } else if (stage == 'after') {
+                        child.activate(newEvent());
+                    }
+                }
+                // Deactivate all subnodes but the already active one
+                function exclusive(child, stage) {
+                    if (stage == 'before' || stage == 'after') {
+                        child.deactivate(newEvent());
+                    }
+                }
+                // Activates/deactivates child nodes for this tree node
+                function handleChildren(that, evt) {
+                    var checkMode;
+                    if (that.options.mode == 'activateBefore') {
+                        checkMode = activateBefore;
+                    } else if (that.options.mode == 'activateAfter') {
+                        checkMode = activateAfter;
+                    } else if (that.options.mode == 'exclusive'
+                            || that.options.exclusive !== false) {
+                        checkMode = exclusive;
+                    }
+                    if (checkMode) {
+                        var stage = 'before';
+                        var f = function(child) {
+                            if (stage == 'before'
+                                    && child.isParentOf(evt.node, true)) {
+                                stage = 'in';
+                            }
+                            checkMode(child, stage);
+                            if (stage == 'in') {
+                                stage = 'after';
+                            }
+                        }
+                        that._forEach([], f);
+                    }
+                }
+                return function(evt) {
+                    var that = this;
+                    if (evt.node != that) {
+                        // One of sub-nodes was activated
+                        if (evt.node.isActive() && !evt.internal) {
+                            handleChildren(that, evt);
+                            that.activate();
+                        }
+                    } else {
+                        // Deactivating of this node
+                        if (!that.isActive() && that.options.deactivateAll) {
+                            that.visit({
+                                after : function(child) {
+                                    child.deactivate(newEvent());
                                 }
                             })
                         }
-                        that.activate();
                     }
-                } else if (!evt.internal && !that.isActive()
-                        && that.options.deactivateAll) {
-                    that.visit({
-                        after : function(child) {
-                            child.deactivate({
-                                internal : true
-                            });
-                        }
-                    })
-                }
-            },
 
+                }
+            })(),
         };
 
         /* ------------------------------------------------- */
@@ -3777,8 +3841,8 @@
                 var zIndex = this._getZIndex();
                 var maxZoom = this._view.getMaxZoom();
 
-                var layer = newImageTileLayer();
-                // var layer = newCanvasTileLayer();
+                // var layer = newImageTileLayer();
+                var layer = newCanvasTileLayer();
 
                 function newImageTileLayer() {
                     var layer = L.tileLayer(tilesUrl, {
