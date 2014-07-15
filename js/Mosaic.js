@@ -3841,8 +3841,8 @@
                 var zIndex = this._getZIndex();
                 var maxZoom = this._view.getMaxZoom();
 
-                // var layer = newImageTileLayer();
-                var layer = newCanvasTileLayer();
+                var layer = newImageTileLayer();
+                // var layer = newCanvasTileLayer();
 
                 function newImageTileLayer() {
                     var layer = L.tileLayer(tilesUrl, {
