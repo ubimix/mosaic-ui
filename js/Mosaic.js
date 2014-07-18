@@ -1340,10 +1340,10 @@
             getResourceType : function(resource) {
                 if (!resource)
                     return null;
-                if (resource.type)
-                    return resource.type;
                 var properties = resource.properties || {};
                 var type = properties.type;
+                if (!type && resource.type)
+                    type = resource.type;
                 return type || 'Resource';
             },
 
