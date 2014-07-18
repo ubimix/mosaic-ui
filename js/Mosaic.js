@@ -3084,8 +3084,14 @@
              * Returns <code>true</code> if the specified geometry is empty.
              */
             _isEmptyGeometry : function(geom) {
-                return (!geom || !geom.coordinates || !geom.coordinates.length
-                        || !geom.coordinates[0] || !geom.coordinates[1]);
+                if (!geom || !geom.coordinates // 
+                        || !geom.coordinates.length)
+                    return true;
+                if (geom.type == 'Point') {
+                    if (!geom.coordinates[0] || !geom.coordinates[1])
+                        return true;
+                }
+                return false;
             },
 
             /** Cleans up already existing widgets */
@@ -3127,6 +3133,7 @@
                 var that = this;
                 this._dataSet.loadResources({}).then(function(cursor) {
                     var resources = cursor.getList();
+                    that._resourceCounter = that._resourceCounter || 0;
                     _.each(resources, function(resource) {
                         that._renderResourceFigure(resource, that._groupLayer);
                     }, that);
