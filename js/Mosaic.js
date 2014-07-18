@@ -26,9 +26,13 @@
              * Checks the given options object, interprets it (if it is a
              * function) and returns non-null resulting value.
              */
-            getOptions : function(options) {
+            getOptions : function(options, instance) {
                 if (_.isFunction(options)) {
-                    options = options();
+                    if (instance){
+                        options = options.call(instance);
+                    } else {
+                        options = options();
+                    }
                 } else {
                     options = options || {};
                 }
@@ -3152,7 +3156,7 @@
                 if (view) {
                     view.render();
                     options = _.extend(options, Mosaic.Utils
-                            .getOptions(view.options));
+                            .getOptions(view.options, view));
                     var iconOptions = Mosaic.Utils.getOptions(view.icon);
                     if (Mosaic.MapMarkerView.hasHtmlMarker(view)) {
                         iconOptions.html = view.getElement().html();
