@@ -28,7 +28,7 @@
              */
             getOptions : function(options, instance) {
                 if (_.isFunction(options)) {
-                    if (instance){
+                    if (instance) {
                         options = options.call(instance);
                     } else {
                         options = options();
@@ -2093,23 +2093,32 @@
             _render : function() {
                 var that = this;
                 var element = that.getElement();
-                var template = that.template;
-                if (template) {
-                    var options = _.extend({}, that.options, {
-                        view : that
-                    });
-                    if (_.isString(template)) {
-                        template = _.template(template);
-                    }
-                    var html = template(options);
-                    element.html(html);
-                }
+                that._renderTemplate();
                 if (that.className) {
                     element.attr('class', that.className);
                 }
                 that.renderElement(element);
                 return that;
             },
+
+            /**
+             * Visualizes data using the internal template (if it is defined in
+             * this view).
+             */
+            _renderTemplate : function() {
+                var template = that.template;
+                if (!template)
+                    return;
+                var options = _.extend({}, that.options, {
+                    view : that
+                });
+                if (_.isString(template)) {
+                    template = _.template(template);
+                }
+                var html = template(options);
+                var element = that.getElement();
+                element.html(html);
+            }
 
         });
 
@@ -3155,8 +3164,8 @@
                 resource);
                 if (view) {
                     view.render();
-                    options = _.extend(options, Mosaic.Utils
-                            .getOptions(view.options, view));
+                    options = _.extend(options, Mosaic.Utils.getOptions(
+                            view.options, view));
                     var iconOptions = Mosaic.Utils.getOptions(view.icon);
                     if (Mosaic.MapMarkerView.hasHtmlMarker(view)) {
                         iconOptions.html = view.getElement().html();
