@@ -2,17 +2,15 @@
     "use strict";
 
     if (context.define) {
-        context.define([ 'underscore', 'jquery', 'leaflet' ], module);
+        context.define([ 'mosaic-commons', 'underscore', 'jquery', 'leaflet' ],
+                module);
     } else {
-        context.Mosaic = module(context._, context.jQuery, context.L);
+        var Mosaic = context.Mosaic || function() {
+        }
+        context.Mosaic = module(Mosaic, context._, context.jQuery, context.L);
     }
 
-    function module(_, $, L) {
-
-        /** Common namespace */
-        var Mosaic = function() {
-        }
-        Mosaic.prototype = Mosaic;
+    function module(Mosaic, _, $, L) {
 
         /* --------------------------------------------------- */
         /* Static utility methods */
@@ -226,7 +224,7 @@
         /* --------------------------------------------------- */
 
         /** Common superclass for all other types. */
-        Mosaic.Class = (function() {
+        Mosaic.Class = Mosaic.Class || (function() {
             function copy(to, from) {
                 for ( var name in from) {
                     if (_.has(from, name) && name !== 'prototype') {
