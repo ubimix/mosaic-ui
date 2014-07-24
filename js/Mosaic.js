@@ -3920,26 +3920,6 @@
                 var layer = new Mosaic.MapTiles.UtfGrid({
                     url : utfgridUrl
                 });
-                var that = this;
-                var searchDeferred;
-                layer.on('startLoading', function(e) {
-                    searchDeferred = that._dataSet.runSearch();
-                });
-                layer.on('endLoading', function(e) {
-                    var index = {};
-                    _.each(e.tiles, function(tile) {
-                        var resources = layer.getTileObjects(tile);
-                        _.each(resources, function(resource) {
-                            var id = that._dataSet.getResourceId(resource);
-                            index[id] = resource;
-                        })
-                    })
-                    var d = searchDeferred;
-                    searchDeferred = null;
-                    if (d) {
-                        d.resolve(index);
-                    }
-                });
                 function toObject(value) {
                     // FIXME: it should be defined at the server side
                     if (_.isString(value)) {
