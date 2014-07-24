@@ -2106,6 +2106,7 @@
              * this view).
              */
             _renderTemplate : function() {
+                var that = this;
                 var template = that.template;
                 if (!template)
                     return;
