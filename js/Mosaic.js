@@ -2,7 +2,7 @@
     "use strict";
 
     if (context.define) {
-        context.define([ 'underscore', 'jquery', 'L' ], module);
+        context.define([ 'underscore', 'jquery', 'leaflet' ], module);
     } else {
         context.Mosaic = module(context._, context.jQuery, context.L);
     }
