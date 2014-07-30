@@ -19,6 +19,24 @@ module.exports = function(config) {
         'dist/Mosaic.js', // 
         'test/*_spec.js' //
         ],
+//
+//        // add webpack as preprocessor
+//        preprocessors : {
+//            'src/**/*.js' : [ 'webpack' ],
+//            'test/*_spec.js' : [ 'webpack' ]
+//        },
+//
+//        webpack : {
+//            cache : true,
+//        },
+//        webpackServer : {
+//        // webpack-dev-server configuration
+//        // webpack-dev-middleware configuration
+//        },
+//        // the port used by the webpack-dev-server defaults to "config.port" + 1
+//        // webpackPort : 1234,
+//
+//        // plugins : [ require("karma-webpack") ],
 
         // list of files to exclude
         exclude : [],

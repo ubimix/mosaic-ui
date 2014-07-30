@@ -5,6 +5,8 @@
     var $ = require('jquery');
     var L = require('leaflet');
     require('leaflet.markercluster');
+    require('./Mosaic.AdapterManager');
+    require('./Mosaic.TemplateView');
 
     /* --------------------------------------------------- */
     /* Static utility methods */
@@ -31,7 +33,9 @@
             return options;
         },
 
-        /** Returns an option value corresponding to the specified key. */
+        /**
+         * Returns an option value corresponding to the specified key.
+         */
         getOption : function(options, key) {
             options = this.getOptions(options);
             var value = options[key];
@@ -42,206 +46,72 @@
         }
     };
 
-    /**
-     * Converts the text content of the specified element into a JS object. This
-     * utility method could be used to convert JS code defined in
-     * <code>&lt;script>..&lt;script></code> elements into an object.
-     */
-    Mosaic.elementToObject = function(e) {
-        var results = [];
-        var that = this;
-        e.each(function() {
-            try {
-                var text = $(this).text();
-                text = Mosaic.Utils.trim(text);
-                text = '( ' + text + ')';
-                var handle = eval;
-                var obj = handle(text);
-                if (_.isFunction(obj)) {
-                    obj = obj();
-                }
-                results.push(obj);
-            } catch (e) {
-                console.log('ERROR!', e.stack);
-            }
-        });
-        return results;
-    };
-
-    /* --------------------------------------------------- */
-
-    /** Common mixins */
-    Mosaic.Mixins = {
-
-        /**
-         * A basic mix-in method used to defined the type of the parent class.
-         */
-        getType : function() {
-            var type = this.type = this.type || _.uniqueId('type-');
-            return type;
-        },
-
-        /**
-         * This mix-in method returns a unique identifier for instances of the
-         * parent class.
-         */
-        getId : function() {
-            var options = this.options = this.options || {};
-            var id = options.id = options.id || _.uniqueId('id-');
-            return id;
-        },
-
-        /** Events mixins */
-        Events : {
-            /** Registers listeners for the specified event key. */
-            on : function(eventKey, handler, context) {
-                var listeners = this.__listeners = this.__listeners || {};
-                context = context || this;
-                var list = listeners[eventKey] = listeners[eventKey] || [];
-                list.push({
-                    handler : handler,
-                    context : context
-                });
-            },
-            /** Removes a listener for events with the specified event key */
-            off : function(eventKey, handler, context) {
-                var listeners = this.__listeners;
-                if (!listeners) return;
-                var list = listeners[eventKey];
-                if (!list) return;
-                list = _.filter(list, function(slot) {
-                    var match = (slot.handler === handler);
-                    match &= (!context || slot.context === context);
-                    return !match;
-                });
-                listeners[eventKey] = list.length ? list : undefined;
-            },
-            /** Fires an event with the specified key. */
-            fire : function(eventKey) {
-                var listeners = this.__listeners;
-                if (!listeners) return;
-                var list = listeners[eventKey];
-                if (!list) return;
-                var args = _.toArray(arguments);
-                args.splice(0, 1);
-                _.each(list, function(slot) {
-                    slot.handler.apply(slot.context, args);
-                });
-            }
-        },
-
-        /** Listens to events produced by external objects */
-        listenTo : function(obj, event, handler, context) {
-            var listeners = this._listeners = this._listeners || [];
-            context = context || this;
-            obj.on(event, handler, context);
-            listeners.push({
-                obj : obj,
-                event : event,
-                handler : handler,
-                context : context
-            });
-        },
-
-        /** Removes all event listeners produced by external objects. */
-        stopListening : function(object, event) {
-            if (object) {
-                this._listeners = _.filter(this._listeners, function(listener) {
-                    var keep = true;
-                    var context = listener.context || this;
-                    if (listener.obj == object) {
-                        if (!event || event == listener.event) {
-                            listener.obj.off(listener.event, listener.handler,
-                                    context);
-                            keep = false;
-                        }
-                    }
-                    return keep;
-                }, this);
-            } else {
-                _.each(this._listeners,
-                        function(listener) {
-                            var context = listener.context || this;
-                            listener.obj.off(listener.event, listener.handler,
-                                    context);
-                        }, this);
-                delete this._listeners;
-            }
-        },
-
-        /**
-         * Trigger an event and/or a corresponding method name. Examples:
-         * <ul>
-         * <li> `this.triggerMethod(&quot;foo&quot;)` will trigger the
-         * &quot;foo&quot; event and call the &quot;onFoo&quot; method.</li>
-         * <li> `this.triggerMethod(&quot;foo:bar&quot;) will trigger the
-         * &quot;foo:bar&quot; event and call the &quot;onFooBar&quot; method.</li>
-         * </ul>
-         * This method was copied from Marionette.triggerMethod.
-         */
-        triggerMethod : (function() {
-            // split the event name on the :
-            var splitter = /(^|:)(\w)/gi;
-            // take the event section ("section1:section2:section3")
-            // and turn it in to uppercase name
-            function getEventName(match, prefix, eventName) {
-                return eventName.toUpperCase();
-            }
-            // actual triggerMethod name
-            var triggerMethod = function(event) {
-                // get the method name from the event name
-                var methodName = 'on' + event.replace(splitter, getEventName);
-                var method = this[methodName];
-                // trigger the event, if a trigger method exists
-                if (_.isFunction(this.fire)) {
-                    this.fire.apply(this, arguments);
-                }
-                // call the onMethodName if it exists
-                if (_.isFunction(method)) {
-                    // pass all arguments, except the event name
-                    return method.apply(this, _.tail(arguments));
-                }
-            };
-            return triggerMethod;
-        })(),
-
-    };
-
     /* --------------------------------------------------- */
 
     /** Events triggering/listening */
-    _.extend(Mosaic.Class.prototype, Mosaic.Mixins.Events);
+    Mosaic.ParentClass = function(options) {
+        Mosaic.Events.apply(this, arguments);
+        this.setOptions(options);
+        this.initialize(options);
+    };
+    _.extend(Mosaic.ParentClass, Mosaic.Class);
+    _.extend(Mosaic.ParentClass.prototype, Mosaic.Class.prototype,
+            Mosaic.Events.prototype, {
 
-    /** Default methods and fields. */
-    _.extend(Mosaic.Class.prototype, {
+                /**
+                 * Initializes this object. This method should be overloaded in
+                 * subclasses.
+                 */
+                initialize : function(options) {
+                },
 
-        /** Trigger events and calls onXxx methods on this object. */
-        triggerMethod : Mosaic.Mixins.triggerMethod,
+                /**
+                 * This method returns a unique identifier for this instance.
+                 */
+                getId : function() {
+                    var options = this.options = this.options || {};
+                    var id = options.id = options.id || _.uniqueId('id-');
+                    return id;
+                },
 
-        /** Sets options for this object. */
-        setOptions : function(options) {
-            this.options = _.extend(this.options || {}, options);
-        },
+                /**
+                 * Returns a logical type of this object. This identifier is
+                 * used to retrieve data adapters repsonsible for data rendering
+                 * on this view.
+                 */
+                getType : function() {
+                    var type = this.type = this.type || _.uniqueId('type-');
+                    return type;
+                },
 
-        /** Returns options of this object. */
-        getOptions : function() {
-            return this.options || {};
-        }
+                /**
+                 * Trigger events and calls onXxx methods on this object.
+                 */
+                triggerMethod : Mosaic.Events.triggerMethod,
 
-    });
+                /**
+                 * Listens to events produced by external objects
+                 */
+                listenTo : Mosaic.Events.listenTo,
+
+                /**
+                 * Removes all event listeners produced by external objects.
+                 */
+                stopListening : Mosaic.Events.stopListening,
+
+                /** Returns options of this object. */
+                getOptions : function() {
+                    return this.options || {};
+                }
+
+            });
 
     /* ------------------------------------------------- */
 
     /**
      * Tree structure.
      */
-    Mosaic.TreeNode = Mosaic.Class.extend({
-
-        /** Listens to events produced by external objects */
-        listenTo : Mosaic.Mixins.listenTo,
-
-        /** Removes all event listeners produced by external objects. */
-        stopListening : Mosaic.Mixins.stopListening,
+    Mosaic.TreeNode = Mosaic.ParentClass.extend({
 
         /** Initializes this class */
         initialize : function(options) {
@@ -508,15 +378,18 @@
          * deactivates all other nodes.
          */
         onStatus : (function() {
-            // Returns a new event with a flag that this is an "internal"
-            // event fired by this method; This flag is used to avoid
+            // Returns a new event with a flag that this is an
+            // "internal"
+            // event fired by this method; This flag is used to
+            // avoid
             // infinite event loops.
             function newEvent() {
                 return {
                     internal : true
                 };
             }
-            // Activates all node before and deactivates after already
+            // Activates all node before and deactivates after
+            // already
             // active subnode
             function activateBefore(child, stage) {
                 if (stage == 'before') {
@@ -525,7 +398,8 @@
                     child.deactivate(newEvent());
                 }
             }
-            // Deactivates all node before and deactivates after already
+            // Deactivates all node before and deactivates after
+            // already
             // active subnode
             function activateAfter(child, stage) {
                 if (stage == 'before') {
@@ -593,13 +467,7 @@
     /**
      * Group objects are used to manage exclusive states of a group of objects.
      */
-    Mosaic.Group = Mosaic.Class.extend({
-
-        /** Listens to events produced by external objects */
-        listenTo : Mosaic.Mixins.listenTo,
-
-        /** Removes all event listeners produced by external objects. */
-        stopListening : Mosaic.Mixins.stopListening,
+    Mosaic.Group = Mosaic.ParentClass.extend({
 
         /** Initializes this class */
         initialize : function(options) {
@@ -846,7 +714,7 @@
          * Return a promise for the data loaded from the specified URL
          */
         loadJson : function(url) {
-            var deferred = Mosaic.Promise.defer();
+            var deferred = Mosaic.P.defer();
             $.ajax({
                 dataType : "json",
                 url : url,
@@ -870,7 +738,7 @@
             var head;
             var doc = document;
             var wnd = window;
-            var deferred = Mosaic.Promise.defer();
+            var deferred = Mosaic.P.defer();
             try {
                 callbackKey = callbackKey || 'cb';
                 callbackName = _.uniqueId(callbackKey);
@@ -888,7 +756,7 @@
             } catch (err) {
                 deferred.reject(err);
             }
-            return Mosaic.Promise.fin(deferred.promise, function() {
+            return Mosaic.P.fin(deferred.promise, function() {
                 if (callbackName) {
                     delete wnd[callbackName];
                 }
@@ -919,225 +787,13 @@
 
     };
 
-    /* ------------------------------------------------- */
-
-    /**
-     * A simple Promise-like wrapper around jQuery promises.
-     */
-    Mosaic.Promise = function(param) {
-        var deferred = $.Deferred();
-        deferred.resolve(param);
-        return deferred.promise();
-    };
-
-    /**
-     * Returns a Deferred object containing the following methods and fields: 1)
-     * resolve - a function used to resolve the deferred object 2) reject - a
-     * rejection function 3) promise - a promise field
-     */
-    Mosaic.Promise.defer = function() {
-        var deferred = $.Deferred();
-        deferred.promise = deferred.promise();
-        return deferred;
-    };
-
-    /**
-     * Executes a specified metho when the given promise completes (with a
-     * failure or with a success).
-     */
-    Mosaic.Promise.fin = function(promise, method) {
-        return promise.then(function(result) {
-            method();
-            return result;
-        }, function(err) {
-            method();
-            throw err;
-        });
-    };
-
-    /** Returns a promise waiting for completion for all specified promises. */
-    Mosaic.Promise.all = function(promises, failFast) {
-        var deferred = Mosaic.Promise.defer();
-        var results = [];
-        var errors = [];
-        var hasErrors = false;
-        var counter = 0;
-        function begin(idx) {
-            results[idx] = null;
-            errors[idx] = null;
-            return counter++;
-        }
-        function end(idx, result, error) {
-            counter--;
-            if (error) {
-                errors[idx] = error;
-                hasErrors = true;
-            } else {
-                results[idx] = result;
-            }
-            if (counter === 0 || (!!error && !!failFast)) {
-                if (hasErrors) {
-                    deferred.reject(errors);
-                } else {
-                    deferred.resolve(results);
-                }
-            }
-        }
-        _.each(promises, function(promise) {
-            var idx = begin(counter);
-            promise.then(function(result) {
-                end(idx, result);
-            }, function(err) {
-                end(idx, null, err);
-            });
-        });
-        return deferred.promise;
-    };
-
-    /* --------------------------------------------------- */
-
-    /**
-     * An adapter manager used to register/retrieve objects corresponding to the
-     * types of adaptable object and the types of the target object. This object
-     * is used by views to get view adapters.
-     */
-    Mosaic.AdapterManager = Mosaic.Class.extend({
-        /** Initializes this object */
-        initialize : function() {
-            this._adapters = {};
-        },
-        /** Returns the type of the specified resource. */
-        _getType : function(obj) {
-            var type;
-            if (_.isString(obj)) {
-                type = obj;
-            } else {
-                var o = obj;
-                if (_.isFunction(obj)) {
-                    o = obj.prototype;
-                }
-                type = o.type = o.type || _.uniqueId('type-');
-            }
-            return type;
-        },
-        /**
-         * Returns a key used to find adapters of one type to another.
-         * 
-         * @param from
-         *            the type of the adaptable object
-         * @param to
-         *            type of the target object
-         */
-        _getKey : function(from, to) {
-            var fromType = this._getType(from);
-            var toType = this._getType(to);
-            return fromType + '-' + toType;
-        },
-        /**
-         * Registers a new adapter from one type to another.
-         * 
-         * @param from
-         *            the type of the adaptable object
-         * @param to
-         *            type of the target object
-         * @param adapter
-         *            the adapter type
-         */
-        registerAdapter : function(from, to, adapter) {
-            var key = this._getKey(from, to);
-            this._adapters[key] = adapter;
-        },
-
-        /** Returns an adapter of one object type to another type. */
-        getAdapter : function(from, to) {
-            var key = this._getKey(from, to);
-            return this._adapters[key];
-        },
-        /**
-         * Creates and returns a new adapter from one type to another. If the
-         * registered adapter is a function then it is used as constructor to
-         * create a new object.
-         */
-        newAdapterInstance : function(from, to, options) {
-            var AdapterType = this.getAdapter(from, to);
-            var result = null;
-            if (_.isFunction(AdapterType)) {
-                options = options || {};
-                if (this._checkValidity(AdapterType, options)) {
-                    if (_.isFunction(AdapterType.initialize)) {
-                        AdapterType.initialize(options);
-                    }
-                    result = new AdapterType(options);
-                    if (!this._checkValidity(result, options)) {
-                        result = null;
-                    }
-                }
-            } else {
-                result = AdapterType;
-            }
-            return result;
-        },
-        /** Removes an adapter from one type to another. */
-        removeAdapter : function(from, to) {
-            var key = this._getKey(from, to);
-            var result = this._adapters[key];
-            delete this._adapters[key];
-            return result;
-        },
-
-        /**
-         * Checks if option values are valid using validation methods on the
-         * specified object
-         */
-        _checkValidity : function(obj, options) {
-            if (!_.isFunction(obj.isValid)) return true;
-            var result = obj.isValid(options);
-            return result;
-        }
-    });
-    /**
-     * A static method returning the singlethon instance of the AdapterManager.
-     */
-    Mosaic.AdapterManager.getInstance = function() {
-        if (!this._instance) {
-            this._instance = new Mosaic.AdapterManager();
-        }
-        return this._instance;
-    };
-
-    /**
-     * This mixin method should be added to individual types to enable
-     * registering type-specific resource extensions. This method iterates over
-     * the specified resource types and registers the corresponding adapters.
-     * The type of the adapter is the same as the class where this mixin is
-     * added.
-     */
-    Mosaic._registerTypeAdapters = function(config) {
-        var adapterManager = Mosaic.AdapterManager.getInstance();
-        _.each(config, function(value, type) {
-            adapterManager.registerAdapter(type, this, value);
-        }, this);
-    };
-
     /* --------------------------------------------------- */
 
     /**
      * A common super-class for all "data sets" giving access to resources. Each
      * dataset could be seen as a collection of resources.
      */
-    Mosaic.DataSet = Mosaic.Class.extend({
-
-        /** Listens to events produced by external objects */
-        listenTo : Mosaic.Mixins.listenTo,
-
-        /** Returns a unique identifier of this dataset */
-        getId : Mosaic.Mixins.getId,
-
-        /**
-         * Returns the logical type of this dataset. This value should be
-         * defined as a "type" field in subclasses.
-         */
-        getType : Mosaic.Mixins.getType,
+    Mosaic.DataSet = Mosaic.ParentClass.extend({
 
         /**
          * Initializes internal fields for objects of this type.
@@ -1265,7 +921,9 @@
             return false;
         },
 
-        /** Create and returns an event for the specified object */
+        /**
+         * Create and returns an event for the specified object
+         */
         newEvent : function(event) {
             return _.extend({
                 priority : 0,
@@ -1278,7 +936,7 @@
          * real search operation and return a promise for search results.
          */
         _doSearch : function(params) {
-            return Mosaic.Promise(true);
+            return Mosaic.P(true);
         },
 
         /** Returns the currently active search parameters */
@@ -1298,7 +956,7 @@
             that.fire('search:updateCriteria', that.newEvent({
                 params : params
             }));
-            return Mosaic.Promise().then(function() {
+            return Mosaic.P().then(function() {
                 return that._doSearch(params);
             });
         },
@@ -1311,7 +969,7 @@
         runSearch : function() {
             var that = this;
             that.stopSearch();
-            var deferred = that._searchDeferred = Mosaic.Promise.defer();
+            var deferred = that._searchDeferred = Mosaic.P.defer();
             that.fire('search:begin', that.newEvent({
                 params : that._searchParams
             }));
@@ -1412,7 +1070,7 @@
     /**
      * This is a cursor providing access to underlying resources.
      */
-    Mosaic.ResourceCursor = Mosaic.Class.extend({
+    Mosaic.ResourceCursor = Mosaic.ParentClass.extend({
         /**
          * Initializes this object. Sets the total number of elements covered by
          * this cursor.
@@ -1420,7 +1078,9 @@
         initialize : function(options) {
             this.setOptions(options);
         },
-        /** Returns the total number of elements covered by this cursor. */
+        /**
+         * Returns the total number of elements covered by this cursor.
+         */
         getFullLength : function() {
             return this.options.length || 0;
         },
@@ -1467,12 +1127,14 @@
             });
         },
 
-        /** Creates and returns a new cursor wrapping the specified list */
+        /**
+         * Creates and returns a new cursor wrapping the specified list
+         */
         _loadNewCursor : function(list) {
             var cursor = new Mosaic.ResourceCursor({
                 list : list
             });
-            return Mosaic.Promise(cursor);
+            return Mosaic.P(cursor);
         },
 
     });
@@ -1488,14 +1150,15 @@
             if (!that._loadPromise) {
                 if (that.options.url) {
                     that._loadPromise = //
-                    Mosaic.IO.loadJson(that.options.url) // 
+                    Mosaic.IO.loadJson(that.options.url)
+                    //
                     .then(function(data) {
                         var result = data && //
                         _.isArray(data.features) ? data.features : data;
                         return _.toArray(result);
                     });
                 } else {
-                    that._loadPromise = Mosaic.Promise([]);
+                    that._loadPromise = Mosaic.P([]);
                 }
             }
             return that._loadPromise;
@@ -1505,7 +1168,7 @@
         _getList : function() {
             var that = this;
             if (that._list) {
-                return Mosaic.Promise(that._list);
+                return Mosaic.P(that._list);
             } else {
                 return that._loadData().then(function(list) {
                     that._list = list;
@@ -1614,9 +1277,11 @@
             return _.values(this._resourceIndex);
         },
 
-        /** Returns a promise giving access to already loaded resources */
+        /**
+         * Returns a promise giving access to already loaded resources
+         */
         _getList : function() {
-            return Mosaic.Promise(this.getLoadedResources());
+            return Mosaic.P(this.getLoadedResources());
         },
 
         /**
@@ -1649,13 +1314,7 @@
      * datasets. So all views intercept these events and visualize the data
      * according to their types.
      */
-    Mosaic.App = Mosaic.Class.extend({
-
-        /** Listens to events produced by external objects */
-        listenTo : Mosaic.Mixins.listenTo,
-
-        /** Removes all event listeners produced by external objects. */
-        stopListening : Mosaic.Mixins.stopListening,
+    Mosaic.App = Mosaic.ParentClass.extend({
 
         /** Initializes this application and creates internal fields. */
         initialize : function(options) {
@@ -1747,285 +1406,6 @@
     });
 
     /* --------------------------------------------------- */
-
-    /**
-     * Template-based view. It uses HTML templates to represent information.
-     */
-    Mosaic.TemplateView = Mosaic.Class.extend({
-        /** Name of this type */
-        type : 'TemplateView',
-
-        /** Returns a unique identifier of this view. */
-        getId : Mosaic.Mixins.getId,
-
-        /**
-         * Returns a logical type of this view. This identifier is used to
-         * retrieve data adapters repsonsible for data rendering on this view.
-         */
-        getType : Mosaic.Mixins.getType,
-
-        /** Listens to events produced by external objects */
-        listenTo : Mosaic.Mixins.listenTo,
-
-        /** Removes all event listeners produced by external objects. */
-        stopListening : Mosaic.Mixins.stopListening,
-
-        /** Initializes this object. */
-        initialize : function(options) {
-            this.setOptions(options);
-            this.triggerMethod('initialize');
-        },
-
-        /**
-         * Returns the topmost DOM element of this view.
-         */
-        getElement : function() {
-            if (!this.$el) {
-                var el = this.options.el || '<div></div>';
-                this.$el = $(el);
-            }
-            return this.$el;
-        },
-
-        /**
-         * This is a default rendering method which is called if a method
-         * referenced in the "data-render" attribute was not found.
-         */
-        renderDefault : function(el, methodName) {
-            var err = new Error('[' + methodName + //
-            ']: Renderer method not found.');
-            console.log(err.stack, el);
-        },
-
-        /**
-         * This is a default method which is called after rendering if a method
-         * referenced in the "data-rendered" attribute was not found.
-         */
-        renderedDefault : function(el, methodName) {
-            var err = new Error('[' + methodName + ']: Method called ' + //
-            'after the rendering process ' + 'is not defined.');
-            console.log(err.stack, el);
-        },
-
-        /**
-         * Default method used to handle events for which no specific handlers
-         * were defined.
-         */
-        handleDefault : function(el, methodName) {
-            var err = new Error('[' + methodName + //
-            ']: A handler method with such a name ' + //
-            'was not found.');
-            console.log(err.stack, el);
-        },
-
-        /**
-         * Public method rendering the specified element. This method seeks all
-         * elements containing "data-render" attributes and calls functions
-         * referenced by this attribute. When the rendering process is finished
-         * then this method calls all functions referenced by the
-         * "data-rendered" attribute. Referenced functions should be defined in
-         * this view and they has to accept one parameter - a reference to the
-         * rendered element.
-         */
-        renderElement : function(elm, render) {
-            var list = [];
-            this._renderElement(elm, render, list);
-            // Notify about the end of the rendering process
-            _.each(list, function(e) {
-                this._callReferencedMethod(e, 'data-rendered',
-                        'renderedDefault');
-            }, this);
-        },
-
-        /**
-         * Binds event listeners to elements marked by "data-action-xxx"
-         * attributes (where "xxx" is the name of the action). The value of this
-         * action attributes should reference event listeners defined in this
-         * view. Example:
-         * <code>&lt;div data-action-click="sayHello">Hello&lt;/div></code>
-         */
-        bindListeners : function(elm, event, attrName) {
-            var element = elm[0];
-            if (!element) return;
-            if (attrName === undefined) {
-                attrName = 'data-action-' + event;
-            }
-            var that = this;
-            var selector = '[' + attrName + ']';
-            elm.on(event, selector, function(ev) {
-                var e = $(ev.currentTarget);
-                var actionName = e.attr(attrName);
-                var action = that[actionName];
-                if (_.isFunction(action)) {
-                    action.call(that, ev, e);
-                } else {
-                    that.handleDefault(e, actionName);
-                }
-            });
-        },
-
-        /**
-         * This method renders this view. It performs the following actions: 1)
-         * it takes the topmost element of this class (using the "getElement"
-         * method) 2) If there is a "template" field defined in this object then
-         * it is used as a source for the underscore#template method to render
-         * the content; the result of template rendering is appended to the
-         * view's element. 3) This method calls all functions referenced in the
-         * "data-render" fields 4) After rendering it calls functions referenced
-         * in the "data-rendered" element attributes (to finalize the rendering
-         * process). 5) It attaches event listeners referenced by the
-         * "data-action-xxx" attributes.
-         */
-        render : function() {
-            var that = this;
-            that.triggerMethod('render:begin');
-            that._render();
-            that._bindEventListeners();
-            that.triggerMethod('render:end');
-            return this;
-        },
-
-        /** Removes all registered listeners and removes this view from DOM. */
-        remove : function() {
-            this.triggerMethod('remove');
-            this.stopListening();
-            var element = this.getElement();
-            element.remove();
-            return this;
-        },
-
-        /* ----------------------------- */
-
-        /**
-         * This method calls a method of this view referenced by the specified
-         * element attribute.
-         */
-        _callReferencedMethod : function(elm, field, def) {
-            var result = null;
-            var methodName = elm.attr(field);
-            if (methodName) {
-                var method = this[methodName] || this[def];
-                elm.removeAttr(field);
-                if (method) {
-                    result = method.call(this, elm, methodName);
-                }
-            }
-            return result;
-        },
-
-        /**
-         * This internal method renders the specified element. It is called by
-         * the public "renderElement" method. This method seeks all elements
-         * containing "data-render" attributes and calls functions referenced by
-         * this attribute. When the rendering process is finished then this
-         * method calls all functions referenced by the "data-rendered"
-         * attribute. Referenced functions should be defined in this view and
-         * they has to accept one parameter - a reference to the rendered
-         * element.
-         */
-        _renderElement : function(elm, render, list) {
-            var visit = true;
-            if (render !== false) {
-                if (elm.attr('data-rendered')) {
-                    list.push(elm);
-                }
-                var result = this._callReferencedMethod(elm, 'data-render',
-                        'renderDefault');
-                visit = result !== false;
-            }
-            if (visit) {
-                var children = _.toArray(elm.children());
-                _.each(children, function(elm) {
-                    this._renderElement($(elm), true, list);
-                }, this);
-            }
-            this.triggerMethod('render');
-        },
-
-        /**
-         * Binds event listeners referenced in "data-action-xxx" element
-         * attributes (where "xxx" is "click", "mouseover", "mouseout", "focus",
-         * "blur", "keypress", "keydown", "keyup"...).
-         */
-        _bindEventListeners : function() {
-            var actions = [ 'click', 'mouseover', 'mouseout', 'focus', 'blur',
-                    'keypress', 'keydown', 'keyup' ];
-            var element = this.getElement();
-            _.each(actions, function(action) {
-                this.bindListeners(element, action);
-            }, this);
-        },
-
-        /**
-         * Renders the topmost element. This method is called from the public
-         * "render" method (see the description in this method). This method
-         * does not fires any events.
-         */
-        _render : function() {
-            var that = this;
-            var element = that.getElement();
-            that._renderTemplate();
-            if (that.className) {
-                element.attr('class', that.className);
-            }
-            that.renderElement(element);
-            return that;
-        },
-
-        /**
-         * Visualizes data using the internal template (if it is defined in this
-         * view).
-         */
-        _renderTemplate : function() {
-            var that = this;
-            var template = that.template;
-            if (!template) return;
-            var options = _.extend({}, that.options, {
-                view : that
-            });
-            if (_.isString(template)) {
-                template = _.template(template);
-            }
-            var html = template(options);
-            var element = that.getElement();
-            element.html(html);
-        }
-
-    });
-
-    /**
-     * Extends the specified TemplateView object with the HTML content defined
-     * in the given element and with methods defined in "script" elements marked
-     * by attributes "data-type" equal to "methods" (for instance methods) and
-     * "const" for static methods.
-     */
-    Mosaic.TemplateView.extendViewType = function(e, View) {
-        e = $(e).clone();
-        View = View || this.extend({});
-
-        // Define static constants
-        var scripts = e.find('script[data-type="static"]');
-        _.each(Mosaic.elementToObject(scripts), function(obj) {
-            _.extend(View, obj);
-        }, this);
-        scripts.remove();
-
-        // Define template methods
-        scripts = e.find('script');
-        _.each(Mosaic.elementToObject(scripts), function(obj) {
-            _.extend(View.prototype, obj);
-        }, this);
-        // Remove all scripts
-        scripts.remove();
-
-        // The rest of the code is used as a template
-        var html = e.html();
-        html = Mosaic.Utils.trim(html);
-        if (html && html !== '') {
-            View.prototype.template = html;
-        }
-        return View;
-    };
 
     /* ------------------------------------------------- */
 
@@ -2161,7 +1541,9 @@
         getResource : function() {
             return this.options.resource;
         },
-        /** Returns the data set managing the underlying resource */
+        /**
+         * Returns the data set managing the underlying resource
+         */
         getDataSet : function() {
             return this.options.dataSet;
         },
@@ -2173,11 +1555,10 @@
      * This is an utility class which is used to control the state of popup
      * windows on the map.
      */
-    Mosaic.MapPopupControl = Mosaic.Class.extend({
+    Mosaic.MapPopupControl = Mosaic.ParentClass.extend({
 
         /** Initializes this object */
         initialize : function(options) {
-            this.setOptions(options);
         },
 
         /**
@@ -2190,13 +1571,13 @@
             options = options || {};
             if (!_.isFunction(options.action) || //
             !that._checkPriority(options)) {
-                return Mosaic.Promise();
+                return Mosaic.P();
             } else {
                 return that.close(options).then(function(result) {
                     that._priority = options.priority || 0;
                     return options.action();
                 }).then(function(deferred) {
-                    that._deferred = deferred || new Mosaic.Promise.defer();
+                    that._deferred = deferred || new Mosaic.P.defer();
                     var promise = that._deferred.promise;
                     promise.then(function() {
                         that._priority = 0;
@@ -2215,7 +1596,7 @@
             var that = this;
             var result = false;
             options = options || {};
-            var promise = Mosaic.Promise();
+            var promise = Mosaic.P();
             if (that._checkPriority(options)) {
                 result = true;
                 if (that._deferred) {
@@ -2412,11 +1793,7 @@
      * An abstract ViewAdapter used as a superclass for all DataSet - View
      * adapters.
      */
-    Mosaic.ViewAdapter = Mosaic.Class.extend({
-
-        stopListening : Mosaic.Mixins.stopListening,
-
-        listenTo : Mosaic.Mixins.listenTo,
+    Mosaic.ViewAdapter = Mosaic.ParentClass.extend({
 
         initialize : function(options) {
             this.setOptions(options);
@@ -2491,7 +1868,9 @@
             this._viewIndex[resourceId] = view;
         },
 
-        /** Removes the specified view from the internal index */
+        /**
+         * Removes the specified view from the internal index
+         */
         _removeResourceViewFromIndex : function(view) {
             if (!view || !view.getResource) return;
             var resource = view.getResource();
@@ -2511,7 +1890,9 @@
             this._viewIndex = {};
         },
 
-        /** Returns a view corresponding to the specified resource */
+        /**
+         * Returns a view corresponding to the specified resource
+         */
         _getResourceView : function(resource) {
             var resourceId = this._dataSet.getResourceId(resource);
             return this._viewIndex[resourceId];
@@ -2525,7 +1906,7 @@
      * on the map. Used by the Mosaic.GeoJsonMapViewAdapter class to visualize
      * resources.
      */
-    Mosaic.MapFigureOptions = Mosaic.Class.extend({
+    Mosaic.MapFigureOptions = Mosaic.ParentClass.extend({
         type : 'MapFigureOptions'
     });
 
@@ -2641,7 +2022,9 @@
             return value;
         },
 
-        /** This method renders the underlying data set on the view. */
+        /**
+         * This method renders the underlying data set on the view.
+         */
         renderView : function() {
             var that = this;
             that._unbindDataEventListeners();
@@ -2719,19 +2102,21 @@
             var that = this;
             var resource = that._dataSet.getResourceFromEvent(e);
             var resourceId = that._dataSet.getResourceId(resource);
-            if (!resource || !resourceId) return Mosaic.Promise(false);
+            if (!resource || !resourceId) return Mosaic.P(false);
 
-            // Exit if there is no layers corresponding to the
+            // Exit if there is no layers corresponding to
+            // the
             // specified resource
             var layer = that._getResourceLayer(resource);
 
             /* Creates a view for this resource */
             var view = that.newResourceView(AdapterType, resource);
 
-            // Exit if there is no visualization defined for the
+            // Exit if there is no visualization defined for
+            // the
             // current resource type
             if (!view) {
-                return Mosaic.Promise(false);
+                return Mosaic.P(false);
             }
 
             // Render the view
@@ -2772,7 +2157,7 @@
 
                 // Prepare the resulting deferred object
                 // It is used to close the popup
-                var deferred = Mosaic.Promise.defer();
+                var deferred = Mosaic.P.defer();
                 popup.on('close', function() {
                     deferred.resolve();
                 });
@@ -3178,7 +2563,9 @@
 
     /* ------------------------------------------------- */
 
-    /** Full view. Used to visualize individual resources in expanded mode. */
+    /**
+     * Full view. Used to visualize individual resources in expanded mode.
+     */
     Mosaic.ExpandedView = Mosaic.DataSetView.extend({
         type : 'ExpandedView',
         setResourceView : function(view) {
@@ -3208,7 +2595,7 @@
 
     /* ------------------------------------------------- */
 
-    Mosaic.MapTilesLoader = Mosaic.Class.extend({
+    Mosaic.MapTilesLoader = Mosaic.ParentClass.extend({
 
         initialize : function(options) {
             this.setOptions(options);
@@ -3234,7 +2621,7 @@
         loadTiles : function(zoom, points) {
             var that = this;
             var tiles = [];
-            return Mosaic.Promise.all(_.map(points, function(point) {
+            return Mosaic.P.all(_.map(points, function(point) {
                 var idx = tiles.length;
                 tiles.push(null);
                 return that.loadTile(zoom, point).then(function(tile) {
@@ -3252,7 +2639,7 @@
             var that = this;
             var key = that._getKey(zoom, point);
             var tile = that._cache[key];
-            if (tile) return Mosaic.Promise(tile);
+            if (tile) return Mosaic.P(tile);
             return that._loadTile(zoom, point).then(function(tile) {
                 that._cache[key] = tile;
                 return tile;
@@ -3298,7 +2685,7 @@
      * Common superclass for all map layers loading tiles using an external
      * loader object.
      */
-    Mosaic.MapTiles = Mosaic.Class.extend({
+    Mosaic.MapTiles = Mosaic.ParentClass.extend({
 
         /** Initializes this layer */
         initialize : function(options) {
@@ -3366,7 +2753,7 @@
          * 'queue' parameter of this method.
          */
         _loadTiles : function(zoom, queue) {
-            return Mosaic.Promise().then(function() {
+            return Mosaic.P().then(function() {
                 throw new Error('Not implemented');
             });
         },
@@ -3770,7 +3157,8 @@
                 url : utfgridUrl
             });
             function toObject(value) {
-                // FIXME: it should be defined at the server side
+                // FIXME: it should be defined at the server
+                // side
                 if (_.isString(value)) {
                     try {
                         value = JSON.parse(value);
@@ -3832,7 +3220,9 @@
         /* -------------------------- */
         /* Individual event listeners */
 
-        /** This method is called when the dataset recieves an 'show' event */
+        /**
+         * This method is called when the dataset recieves an 'show' event
+         */
         _onShow : function(e) {
             if (e.showTiles) {
                 this._setTilesLayerVisibility(true);
@@ -3842,7 +3232,9 @@
             }
         },
 
-        /** This method is called when the dataset recieves an 'hide' event */
+        /**
+         * This method is called when the dataset recieves an 'hide' event
+         */
         _onHide : function(e) {
             if (e.hideTiles) {
                 this._setTilesLayerVisibility(false);
@@ -3876,12 +3268,14 @@
      */
     Mosaic.registerMapOptions = function(html) {
         html = $(html);
-        // This method recursively iterates over all parent elements and add
+        // This method recursively iterates over all parent elements
+        // and add
         // all parameters defined in these elements.
         function extendOptions(options, el, set) {
             var id = el.attr('id') || _.uniqueId('template-');
             el.attr('id', id);
-            // Check that the element id was not visited yet (to avoid
+            // Check that the element id was not visited yet (to
+            // avoid
             // infinite reference loops)
             set = set || {};
             if (id in set) return options;
@@ -3915,12 +3309,14 @@
      */
     Mosaic.registerViewAdapters = function(html) {
         html = $(html);
-        // This method recursively iterates over all parent elements and add
+        // This method recursively iterates over all parent elements
+        // and add
         // all methods defined in these elements.
         function extendViewType(ViewType, el, set) {
             var id = el.attr('id') || _.uniqueId('template-');
             el.attr('id', id);
-            // Check that the element id was not visited yet (to avoid
+            // Check that the element id was not visited yet (to
+            // avoid
             // infinite reference loops).
             set = set || {};
             if (id in set) return ViewType;
@@ -3948,7 +3344,7 @@
      * This class is used to configure an application using HTML elements as a
      * source of references to DataSets, templates etc.
      */
-    Mosaic.AppConfigurator = Mosaic.Class.extend({
+    Mosaic.AppConfigurator = Mosaic.ParentClass.extend({
         /**
          * This method initializes this object. It loads templates, loads
          * datasets, activates all view panels, etc
@@ -3983,6 +3379,7 @@
             var dataSet = new Mosaic.GeoJsonDataSet(options);
             this.app.addDataSet(dataSet);
         },
+
         /**
          * This method loads and registers all templates for application types.
          * The main element containing templates is referenced by the
@@ -4099,7 +3496,9 @@
             return id;
         },
 
-        /** Extracts common dataset options from the specified element */
+        /**
+         * Extracts common dataset options from the specified element
+         */
         _extractDataSetOptions : function(elm) {
             var that = this;
             var id = elm.data('map-layer');
@@ -4284,5 +3683,7 @@
 
     adapters.registerAdapter(Mosaic.ExpandedView, Mosaic.GeoJsonDataSet,
             Mosaic.GeoJsonExpandedViewAdapter);
+
+    return Mosaic;
 
 })(this);

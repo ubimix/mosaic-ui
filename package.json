@@ -37,6 +37,8 @@
     "karma-ie-launcher": "~0.1.1",
     "karma-firefox-launcher": "~0.1.0",
     "karma-safari-launcher": "~0.1.1",
+    "karma-phantomjs-launcher": "~0.1",
+    "karma-webpack" : "~1.2.1",
     "umx-grunt-config" : "*"
    }
 }

@@ -11,7 +11,7 @@
 		exports["Mosaic"] = factory(require("_"), require("jQuery"), (function webpackLoadOptionalExternalModule() { try { return require("vertx"); } catch(e) {} }()));
 	else
 		root["Mosaic"] = factory(root["_"], root["jQuery"], root["vertx"]);
-})(this, function(__WEBPACK_EXTERNAL_MODULE_2__, __WEBPACK_EXTERNAL_MODULE_3__, __WEBPACK_EXTERNAL_MODULE_30__) {
+})(this, function(__WEBPACK_EXTERNAL_MODULE_2__, __WEBPACK_EXTERNAL_MODULE_3__, __WEBPACK_EXTERNAL_MODULE_32__) {
 return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
@@ -66,11 +66,13 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	(function(context) {
 
-	    var Mosaic = module.exports = __webpack_require__(4);
+	    var Mosaic = module.exports = __webpack_require__(6);
 	    var _ = __webpack_require__(2);
 	    var $ = __webpack_require__(3);
-	    var L = __webpack_require__(5);
-	    __webpack_require__(6);
+	    var L = __webpack_require__(7);
+	    __webpack_require__(8);
+	    __webpack_require__(4);
+	    __webpack_require__(5);
 
 	    /* --------------------------------------------------- */
 	    /* Static utility methods */
@@ -97,7 +99,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	            return options;
 	        },
 
-	        /** Returns an option value corresponding to the specified key. */
+	        /**
+	         * Returns an option value corresponding to the specified key.
+	         */
 	        getOption : function(options, key) {
 	            options = this.getOptions(options);
 	            var value = options[key];
@@ -108,206 +112,72 @@ return /******/ (function(modules) { // webpackBootstrap
 	        }
 	    };
 
-	    /**
-	     * Converts the text content of the specified element into a JS object. This
-	     * utility method could be used to convert JS code defined in
-	     * <code>&lt;script>..&lt;script></code> elements into an object.
-	     */
-	    Mosaic.elementToObject = function(e) {
-	        var results = [];
-	        var that = this;
-	        e.each(function() {
-	            try {
-	                var text = $(this).text();
-	                text = Mosaic.Utils.trim(text);
-	                text = '( ' + text + ')';
-	                var handle = eval;
-	                var obj = handle(text);
-	                if (_.isFunction(obj)) {
-	                    obj = obj();
-	                }
-	                results.push(obj);
-	            } catch (e) {
-	                console.log('ERROR!', e.stack);
-	            }
-	        });
-	        return results;
-	    };
-
-	    /* --------------------------------------------------- */
-
-	    /** Common mixins */
-	    Mosaic.Mixins = {
-
-	        /**
-	         * A basic mix-in method used to defined the type of the parent class.
-	         */
-	        getType : function() {
-	            var type = this.type = this.type || _.uniqueId('type-');
-	            return type;
-	        },
-
-	        /**
-	         * This mix-in method returns a unique identifier for instances of the
-	         * parent class.
-	         */
-	        getId : function() {
-	            var options = this.options = this.options || {};
-	            var id = options.id = options.id || _.uniqueId('id-');
-	            return id;
-	        },
-
-	        /** Events mixins */
-	        Events : {
-	            /** Registers listeners for the specified event key. */
-	            on : function(eventKey, handler, context) {
-	                var listeners = this.__listeners = this.__listeners || {};
-	                context = context || this;
-	                var list = listeners[eventKey] = listeners[eventKey] || [];
-	                list.push({
-	                    handler : handler,
-	                    context : context
-	                });
-	            },
-	            /** Removes a listener for events with the specified event key */
-	            off : function(eventKey, handler, context) {
-	                var listeners = this.__listeners;
-	                if (!listeners) return;
-	                var list = listeners[eventKey];
-	                if (!list) return;
-	                list = _.filter(list, function(slot) {
-	                    var match = (slot.handler === handler);
-	                    match &= (!context || slot.context === context);
-	                    return !match;
-	                });
-	                listeners[eventKey] = list.length ? list : undefined;
-	            },
-	            /** Fires an event with the specified key. */
-	            fire : function(eventKey) {
-	                var listeners = this.__listeners;
-	                if (!listeners) return;
-	                var list = listeners[eventKey];
-	                if (!list) return;
-	                var args = _.toArray(arguments);
-	                args.splice(0, 1);
-	                _.each(list, function(slot) {
-	                    slot.handler.apply(slot.context, args);
-	                });
-	            }
-	        },
-
-	        /** Listens to events produced by external objects */
-	        listenTo : function(obj, event, handler, context) {
-	            var listeners = this._listeners = this._listeners || [];
-	            context = context || this;
-	            obj.on(event, handler, context);
-	            listeners.push({
-	                obj : obj,
-	                event : event,
-	                handler : handler,
-	                context : context
-	            });
-	        },
-
-	        /** Removes all event listeners produced by external objects. */
-	        stopListening : function(object, event) {
-	            if (object) {
-	                this._listeners = _.filter(this._listeners, function(listener) {
-	                    var keep = true;
-	                    var context = listener.context || this;
-	                    if (listener.obj == object) {
-	                        if (!event || event == listener.event) {
-	                            listener.obj.off(listener.event, listener.handler,
-	                                    context);
-	                            keep = false;
-	                        }
-	                    }
-	                    return keep;
-	                }, this);
-	            } else {
-	                _.each(this._listeners,
-	                        function(listener) {
-	                            var context = listener.context || this;
-	                            listener.obj.off(listener.event, listener.handler,
-	                                    context);
-	                        }, this);
-	                delete this._listeners;
-	            }
-	        },
-
-	        /**
-	         * Trigger an event and/or a corresponding method name. Examples:
-	         * <ul>
-	         * <li> `this.triggerMethod(&quot;foo&quot;)` will trigger the
-	         * &quot;foo&quot; event and call the &quot;onFoo&quot; method.</li>
-	         * <li> `this.triggerMethod(&quot;foo:bar&quot;) will trigger the
-	         * &quot;foo:bar&quot; event and call the &quot;onFooBar&quot; method.</li>
-	         * </ul>
-	         * This method was copied from Marionette.triggerMethod.
-	         */
-	        triggerMethod : (function() {
-	            // split the event name on the :
-	            var splitter = /(^|:)(\w)/gi;
-	            // take the event section ("section1:section2:section3")
-	            // and turn it in to uppercase name
-	            function getEventName(match, prefix, eventName) {
-	                return eventName.toUpperCase();
-	            }
-	            // actual triggerMethod name
-	            var triggerMethod = function(event) {
-	                // get the method name from the event name
-	                var methodName = 'on' + event.replace(splitter, getEventName);
-	                var method = this[methodName];
-	                // trigger the event, if a trigger method exists
-	                if (_.isFunction(this.fire)) {
-	                    this.fire.apply(this, arguments);
-	                }
-	                // call the onMethodName if it exists
-	                if (_.isFunction(method)) {
-	                    // pass all arguments, except the event name
-	                    return method.apply(this, _.tail(arguments));
-	                }
-	            };
-	            return triggerMethod;
-	        })(),
-
-	    };
-
 	    /* --------------------------------------------------- */
 
 	    /** Events triggering/listening */
-	    _.extend(Mosaic.Class.prototype, Mosaic.Mixins.Events);
+	    Mosaic.ParentClass = function(options) {
+	        Mosaic.Events.apply(this, arguments);
+	        this.setOptions(options);
+	        this.initialize(options);
+	    };
+	    _.extend(Mosaic.ParentClass, Mosaic.Class);
+	    _.extend(Mosaic.ParentClass.prototype, Mosaic.Class.prototype,
+	            Mosaic.Events.prototype, {
 
-	    /** Default methods and fields. */
-	    _.extend(Mosaic.Class.prototype, {
+	                /**
+	                 * Initializes this object. This method should be overloaded in
+	                 * subclasses.
+	                 */
+	                initialize : function(options) {
+	                },
 
-	        /** Trigger events and calls onXxx methods on this object. */
-	        triggerMethod : Mosaic.Mixins.triggerMethod,
+	                /**
+	                 * This method returns a unique identifier for this instance.
+	                 */
+	                getId : function() {
+	                    var options = this.options = this.options || {};
+	                    var id = options.id = options.id || _.uniqueId('id-');
+	                    return id;
+	                },
 
-	        /** Sets options for this object. */
-	        setOptions : function(options) {
-	            this.options = _.extend(this.options || {}, options);
-	        },
+	                /**
+	                 * Returns a logical type of this object. This identifier is
+	                 * used to retrieve data adapters repsonsible for data rendering
+	                 * on this view.
+	                 */
+	                getType : function() {
+	                    var type = this.type = this.type || _.uniqueId('type-');
+	                    return type;
+	                },
 
-	        /** Returns options of this object. */
-	        getOptions : function() {
-	            return this.options || {};
-	        }
+	                /**
+	                 * Trigger events and calls onXxx methods on this object.
+	                 */
+	                triggerMethod : Mosaic.Events.triggerMethod,
 
-	    });
+	                /**
+	                 * Listens to events produced by external objects
+	                 */
+	                listenTo : Mosaic.Events.listenTo,
+
+	                /**
+	                 * Removes all event listeners produced by external objects.
+	                 */
+	                stopListening : Mosaic.Events.stopListening,
+
+	                /** Returns options of this object. */
+	                getOptions : function() {
+	                    return this.options || {};
+	                }
+
+	            });
 
 	    /* ------------------------------------------------- */
 
 	    /**
 	     * Tree structure.
 	     */
-	    Mosaic.TreeNode = Mosaic.Class.extend({
-
-	        /** Listens to events produced by external objects */
-	        listenTo : Mosaic.Mixins.listenTo,
-
-	        /** Removes all event listeners produced by external objects. */
-	        stopListening : Mosaic.Mixins.stopListening,
+	    Mosaic.TreeNode = Mosaic.ParentClass.extend({
 
 	        /** Initializes this class */
 	        initialize : function(options) {
@@ -574,15 +444,18 @@ return /******/ (function(modules) { // webpackBootstrap
 	         * deactivates all other nodes.
 	         */
 	        onStatus : (function() {
-	            // Returns a new event with a flag that this is an "internal"
-	            // event fired by this method; This flag is used to avoid
+	            // Returns a new event with a flag that this is an
+	            // "internal"
+	            // event fired by this method; This flag is used to
+	            // avoid
 	            // infinite event loops.
 	            function newEvent() {
 	                return {
 	                    internal : true
 	                };
 	            }
-	            // Activates all node before and deactivates after already
+	            // Activates all node before and deactivates after
+	            // already
 	            // active subnode
 	            function activateBefore(child, stage) {
 	                if (stage == 'before') {
@@ -591,7 +464,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	                    child.deactivate(newEvent());
 	                }
 	            }
-	            // Deactivates all node before and deactivates after already
+	            // Deactivates all node before and deactivates after
+	            // already
 	            // active subnode
 	            function activateAfter(child, stage) {
 	                if (stage == 'before') {
@@ -659,13 +533,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    /**
 	     * Group objects are used to manage exclusive states of a group of objects.
 	     */
-	    Mosaic.Group = Mosaic.Class.extend({
-
-	        /** Listens to events produced by external objects */
-	        listenTo : Mosaic.Mixins.listenTo,
-
-	        /** Removes all event listeners produced by external objects. */
-	        stopListening : Mosaic.Mixins.stopListening,
+	    Mosaic.Group = Mosaic.ParentClass.extend({
 
 	        /** Initializes this class */
 	        initialize : function(options) {
@@ -912,7 +780,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	         * Return a promise for the data loaded from the specified URL
 	         */
 	        loadJson : function(url) {
-	            var deferred = Mosaic.Promise.defer();
+	            var deferred = Mosaic.P.defer();
 	            $.ajax({
 	                dataType : "json",
 	                url : url,
@@ -936,7 +804,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            var head;
 	            var doc = document;
 	            var wnd = window;
-	            var deferred = Mosaic.Promise.defer();
+	            var deferred = Mosaic.P.defer();
 	            try {
 	                callbackKey = callbackKey || 'cb';
 	                callbackName = _.uniqueId(callbackKey);
@@ -954,7 +822,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            } catch (err) {
 	                deferred.reject(err);
 	            }
-	            return Mosaic.Promise.fin(deferred.promise, function() {
+	            return Mosaic.P.fin(deferred.promise, function() {
 	                if (callbackName) {
 	                    delete wnd[callbackName];
 	                }
@@ -985,225 +853,13 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	    };
 
-	    /* ------------------------------------------------- */
-
-	    /**
-	     * A simple Promise-like wrapper around jQuery promises.
-	     */
-	    Mosaic.Promise = function(param) {
-	        var deferred = $.Deferred();
-	        deferred.resolve(param);
-	        return deferred.promise();
-	    };
-
-	    /**
-	     * Returns a Deferred object containing the following methods and fields: 1)
-	     * resolve - a function used to resolve the deferred object 2) reject - a
-	     * rejection function 3) promise - a promise field
-	     */
-	    Mosaic.Promise.defer = function() {
-	        var deferred = $.Deferred();
-	        deferred.promise = deferred.promise();
-	        return deferred;
-	    };
-
-	    /**
-	     * Executes a specified metho when the given promise completes (with a
-	     * failure or with a success).
-	     */
-	    Mosaic.Promise.fin = function(promise, method) {
-	        return promise.then(function(result) {
-	            method();
-	            return result;
-	        }, function(err) {
-	            method();
-	            throw err;
-	        });
-	    };
-
-	    /** Returns a promise waiting for completion for all specified promises. */
-	    Mosaic.Promise.all = function(promises, failFast) {
-	        var deferred = Mosaic.Promise.defer();
-	        var results = [];
-	        var errors = [];
-	        var hasErrors = false;
-	        var counter = 0;
-	        function begin(idx) {
-	            results[idx] = null;
-	            errors[idx] = null;
-	            return counter++;
-	        }
-	        function end(idx, result, error) {
-	            counter--;
-	            if (error) {
-	                errors[idx] = error;
-	                hasErrors = true;
-	            } else {
-	                results[idx] = result;
-	            }
-	            if (counter === 0 || (!!error && !!failFast)) {
-	                if (hasErrors) {
-	                    deferred.reject(errors);
-	                } else {
-	                    deferred.resolve(results);
-	                }
-	            }
-	        }
-	        _.each(promises, function(promise) {
-	            var idx = begin(counter);
-	            promise.then(function(result) {
-	                end(idx, result);
-	            }, function(err) {
-	                end(idx, null, err);
-	            });
-	        });
-	        return deferred.promise;
-	    };
-
-	    /* --------------------------------------------------- */
-
-	    /**
-	     * An adapter manager used to register/retrieve objects corresponding to the
-	     * types of adaptable object and the types of the target object. This object
-	     * is used by views to get view adapters.
-	     */
-	    Mosaic.AdapterManager = Mosaic.Class.extend({
-	        /** Initializes this object */
-	        initialize : function() {
-	            this._adapters = {};
-	        },
-	        /** Returns the type of the specified resource. */
-	        _getType : function(obj) {
-	            var type;
-	            if (_.isString(obj)) {
-	                type = obj;
-	            } else {
-	                var o = obj;
-	                if (_.isFunction(obj)) {
-	                    o = obj.prototype;
-	                }
-	                type = o.type = o.type || _.uniqueId('type-');
-	            }
-	            return type;
-	        },
-	        /**
-	         * Returns a key used to find adapters of one type to another.
-	         * 
-	         * @param from
-	         *            the type of the adaptable object
-	         * @param to
-	         *            type of the target object
-	         */
-	        _getKey : function(from, to) {
-	            var fromType = this._getType(from);
-	            var toType = this._getType(to);
-	            return fromType + '-' + toType;
-	        },
-	        /**
-	         * Registers a new adapter from one type to another.
-	         * 
-	         * @param from
-	         *            the type of the adaptable object
-	         * @param to
-	         *            type of the target object
-	         * @param adapter
-	         *            the adapter type
-	         */
-	        registerAdapter : function(from, to, adapter) {
-	            var key = this._getKey(from, to);
-	            this._adapters[key] = adapter;
-	        },
-
-	        /** Returns an adapter of one object type to another type. */
-	        getAdapter : function(from, to) {
-	            var key = this._getKey(from, to);
-	            return this._adapters[key];
-	        },
-	        /**
-	         * Creates and returns a new adapter from one type to another. If the
-	         * registered adapter is a function then it is used as constructor to
-	         * create a new object.
-	         */
-	        newAdapterInstance : function(from, to, options) {
-	            var AdapterType = this.getAdapter(from, to);
-	            var result = null;
-	            if (_.isFunction(AdapterType)) {
-	                options = options || {};
-	                if (this._checkValidity(AdapterType, options)) {
-	                    if (_.isFunction(AdapterType.initialize)) {
-	                        AdapterType.initialize(options);
-	                    }
-	                    result = new AdapterType(options);
-	                    if (!this._checkValidity(result, options)) {
-	                        result = null;
-	                    }
-	                }
-	            } else {
-	                result = AdapterType;
-	            }
-	            return result;
-	        },
-	        /** Removes an adapter from one type to another. */
-	        removeAdapter : function(from, to) {
-	            var key = this._getKey(from, to);
-	            var result = this._adapters[key];
-	            delete this._adapters[key];
-	            return result;
-	        },
-
-	        /**
-	         * Checks if option values are valid using validation methods on the
-	         * specified object
-	         */
-	        _checkValidity : function(obj, options) {
-	            if (!_.isFunction(obj.isValid)) return true;
-	            var result = obj.isValid(options);
-	            return result;
-	        }
-	    });
-	    /**
-	     * A static method returning the singlethon instance of the AdapterManager.
-	     */
-	    Mosaic.AdapterManager.getInstance = function() {
-	        if (!this._instance) {
-	            this._instance = new Mosaic.AdapterManager();
-	        }
-	        return this._instance;
-	    };
-
-	    /**
-	     * This mixin method should be added to individual types to enable
-	     * registering type-specific resource extensions. This method iterates over
-	     * the specified resource types and registers the corresponding adapters.
-	     * The type of the adapter is the same as the class where this mixin is
-	     * added.
-	     */
-	    Mosaic._registerTypeAdapters = function(config) {
-	        var adapterManager = Mosaic.AdapterManager.getInstance();
-	        _.each(config, function(value, type) {
-	            adapterManager.registerAdapter(type, this, value);
-	        }, this);
-	    };
-
 	    /* --------------------------------------------------- */
 
 	    /**
 	     * A common super-class for all "data sets" giving access to resources. Each
 	     * dataset could be seen as a collection of resources.
 	     */
-	    Mosaic.DataSet = Mosaic.Class.extend({
-
-	        /** Listens to events produced by external objects */
-	        listenTo : Mosaic.Mixins.listenTo,
-
-	        /** Returns a unique identifier of this dataset */
-	        getId : Mosaic.Mixins.getId,
-
-	        /**
-	         * Returns the logical type of this dataset. This value should be
-	         * defined as a "type" field in subclasses.
-	         */
-	        getType : Mosaic.Mixins.getType,
+	    Mosaic.DataSet = Mosaic.ParentClass.extend({
 
 	        /**
 	         * Initializes internal fields for objects of this type.
@@ -1331,7 +987,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	            return false;
 	        },
 
-	        /** Create and returns an event for the specified object */
+	        /**
+	         * Create and returns an event for the specified object
+	         */
 	        newEvent : function(event) {
 	            return _.extend({
 	                priority : 0,
@@ -1344,7 +1002,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	         * real search operation and return a promise for search results.
 	         */
 	        _doSearch : function(params) {
-	            return Mosaic.Promise(true);
+	            return Mosaic.P(true);
 	        },
 
 	        /** Returns the currently active search parameters */
@@ -1364,7 +1022,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            that.fire('search:updateCriteria', that.newEvent({
 	                params : params
 	            }));
-	            return Mosaic.Promise().then(function() {
+	            return Mosaic.P().then(function() {
 	                return that._doSearch(params);
 	            });
 	        },
@@ -1377,7 +1035,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        runSearch : function() {
 	            var that = this;
 	            that.stopSearch();
-	            var deferred = that._searchDeferred = Mosaic.Promise.defer();
+	            var deferred = that._searchDeferred = Mosaic.P.defer();
 	            that.fire('search:begin', that.newEvent({
 	                params : that._searchParams
 	            }));
@@ -1478,7 +1136,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    /**
 	     * This is a cursor providing access to underlying resources.
 	     */
-	    Mosaic.ResourceCursor = Mosaic.Class.extend({
+	    Mosaic.ResourceCursor = Mosaic.ParentClass.extend({
 	        /**
 	         * Initializes this object. Sets the total number of elements covered by
 	         * this cursor.
@@ -1486,7 +1144,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	        initialize : function(options) {
 	            this.setOptions(options);
 	        },
-	        /** Returns the total number of elements covered by this cursor. */
+	        /**
+	         * Returns the total number of elements covered by this cursor.
+	         */
 	        getFullLength : function() {
 	            return this.options.length || 0;
 	        },
@@ -1533,12 +1193,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	            });
 	        },
 
-	        /** Creates and returns a new cursor wrapping the specified list */
+	        /**
+	         * Creates and returns a new cursor wrapping the specified list
+	         */
 	        _loadNewCursor : function(list) {
 	            var cursor = new Mosaic.ResourceCursor({
 	                list : list
 	            });
-	            return Mosaic.Promise(cursor);
+	            return Mosaic.P(cursor);
 	        },
 
 	    });
@@ -1554,14 +1216,15 @@ return /******/ (function(modules) { // webpackBootstrap
 	            if (!that._loadPromise) {
 	                if (that.options.url) {
 	                    that._loadPromise = //
-	                    Mosaic.IO.loadJson(that.options.url) // 
+	                    Mosaic.IO.loadJson(that.options.url)
+	                    //
 	                    .then(function(data) {
 	                        var result = data && //
 	                        _.isArray(data.features) ? data.features : data;
 	                        return _.toArray(result);
 	                    });
 	                } else {
-	                    that._loadPromise = Mosaic.Promise([]);
+	                    that._loadPromise = Mosaic.P([]);
 	                }
 	            }
 	            return that._loadPromise;
@@ -1571,7 +1234,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        _getList : function() {
 	            var that = this;
 	            if (that._list) {
-	                return Mosaic.Promise(that._list);
+	                return Mosaic.P(that._list);
 	            } else {
 	                return that._loadData().then(function(list) {
 	                    that._list = list;
@@ -1680,9 +1343,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	            return _.values(this._resourceIndex);
 	        },
 
-	        /** Returns a promise giving access to already loaded resources */
+	        /**
+	         * Returns a promise giving access to already loaded resources
+	         */
 	        _getList : function() {
-	            return Mosaic.Promise(this.getLoadedResources());
+	            return Mosaic.P(this.getLoadedResources());
 	        },
 
 	        /**
@@ -1715,13 +1380,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	     * datasets. So all views intercept these events and visualize the data
 	     * according to their types.
 	     */
-	    Mosaic.App = Mosaic.Class.extend({
-
-	        /** Listens to events produced by external objects */
-	        listenTo : Mosaic.Mixins.listenTo,
-
-	        /** Removes all event listeners produced by external objects. */
-	        stopListening : Mosaic.Mixins.stopListening,
+	    Mosaic.App = Mosaic.ParentClass.extend({
 
 	        /** Initializes this application and creates internal fields. */
 	        initialize : function(options) {
@@ -1813,285 +1472,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	    });
 
 	    /* --------------------------------------------------- */
-
-	    /**
-	     * Template-based view. It uses HTML templates to represent information.
-	     */
-	    Mosaic.TemplateView = Mosaic.Class.extend({
-	        /** Name of this type */
-	        type : 'TemplateView',
-
-	        /** Returns a unique identifier of this view. */
-	        getId : Mosaic.Mixins.getId,
-
-	        /**
-	         * Returns a logical type of this view. This identifier is used to
-	         * retrieve data adapters repsonsible for data rendering on this view.
-	         */
-	        getType : Mosaic.Mixins.getType,
-
-	        /** Listens to events produced by external objects */
-	        listenTo : Mosaic.Mixins.listenTo,
-
-	        /** Removes all event listeners produced by external objects. */
-	        stopListening : Mosaic.Mixins.stopListening,
-
-	        /** Initializes this object. */
-	        initialize : function(options) {
-	            this.setOptions(options);
-	            this.triggerMethod('initialize');
-	        },
-
-	        /**
-	         * Returns the topmost DOM element of this view.
-	         */
-	        getElement : function() {
-	            if (!this.$el) {
-	                var el = this.options.el || '<div></div>';
-	                this.$el = $(el);
-	            }
-	            return this.$el;
-	        },
-
-	        /**
-	         * This is a default rendering method which is called if a method
-	         * referenced in the "data-render" attribute was not found.
-	         */
-	        renderDefault : function(el, methodName) {
-	            var err = new Error('[' + methodName + //
-	            ']: Renderer method not found.');
-	            console.log(err.stack, el);
-	        },
-
-	        /**
-	         * This is a default method which is called after rendering if a method
-	         * referenced in the "data-rendered" attribute was not found.
-	         */
-	        renderedDefault : function(el, methodName) {
-	            var err = new Error('[' + methodName + ']: Method called ' + //
-	            'after the rendering process ' + 'is not defined.');
-	            console.log(err.stack, el);
-	        },
-
-	        /**
-	         * Default method used to handle events for which no specific handlers
-	         * were defined.
-	         */
-	        handleDefault : function(el, methodName) {
-	            var err = new Error('[' + methodName + //
-	            ']: A handler method with such a name ' + //
-	            'was not found.');
-	            console.log(err.stack, el);
-	        },
-
-	        /**
-	         * Public method rendering the specified element. This method seeks all
-	         * elements containing "data-render" attributes and calls functions
-	         * referenced by this attribute. When the rendering process is finished
-	         * then this method calls all functions referenced by the
-	         * "data-rendered" attribute. Referenced functions should be defined in
-	         * this view and they has to accept one parameter - a reference to the
-	         * rendered element.
-	         */
-	        renderElement : function(elm, render) {
-	            var list = [];
-	            this._renderElement(elm, render, list);
-	            // Notify about the end of the rendering process
-	            _.each(list, function(e) {
-	                this._callReferencedMethod(e, 'data-rendered',
-	                        'renderedDefault');
-	            }, this);
-	        },
-
-	        /**
-	         * Binds event listeners to elements marked by "data-action-xxx"
-	         * attributes (where "xxx" is the name of the action). The value of this
-	         * action attributes should reference event listeners defined in this
-	         * view. Example:
-	         * <code>&lt;div data-action-click="sayHello">Hello&lt;/div></code>
-	         */
-	        bindListeners : function(elm, event, attrName) {
-	            var element = elm[0];
-	            if (!element) return;
-	            if (attrName === undefined) {
-	                attrName = 'data-action-' + event;
-	            }
-	            var that = this;
-	            var selector = '[' + attrName + ']';
-	            elm.on(event, selector, function(ev) {
-	                var e = $(ev.currentTarget);
-	                var actionName = e.attr(attrName);
-	                var action = that[actionName];
-	                if (_.isFunction(action)) {
-	                    action.call(that, ev, e);
-	                } else {
-	                    that.handleDefault(e, actionName);
-	                }
-	            });
-	        },
-
-	        /**
-	         * This method renders this view. It performs the following actions: 1)
-	         * it takes the topmost element of this class (using the "getElement"
-	         * method) 2) If there is a "template" field defined in this object then
-	         * it is used as a source for the underscore#template method to render
-	         * the content; the result of template rendering is appended to the
-	         * view's element. 3) This method calls all functions referenced in the
-	         * "data-render" fields 4) After rendering it calls functions referenced
-	         * in the "data-rendered" element attributes (to finalize the rendering
-	         * process). 5) It attaches event listeners referenced by the
-	         * "data-action-xxx" attributes.
-	         */
-	        render : function() {
-	            var that = this;
-	            that.triggerMethod('render:begin');
-	            that._render();
-	            that._bindEventListeners();
-	            that.triggerMethod('render:end');
-	            return this;
-	        },
-
-	        /** Removes all registered listeners and removes this view from DOM. */
-	        remove : function() {
-	            this.triggerMethod('remove');
-	            this.stopListening();
-	            var element = this.getElement();
-	            element.remove();
-	            return this;
-	        },
-
-	        /* ----------------------------- */
-
-	        /**
-	         * This method calls a method of this view referenced by the specified
-	         * element attribute.
-	         */
-	        _callReferencedMethod : function(elm, field, def) {
-	            var result = null;
-	            var methodName = elm.attr(field);
-	            if (methodName) {
-	                var method = this[methodName] || this[def];
-	                elm.removeAttr(field);
-	                if (method) {
-	                    result = method.call(this, elm, methodName);
-	                }
-	            }
-	            return result;
-	        },
-
-	        /**
-	         * This internal method renders the specified element. It is called by
-	         * the public "renderElement" method. This method seeks all elements
-	         * containing "data-render" attributes and calls functions referenced by
-	         * this attribute. When the rendering process is finished then this
-	         * method calls all functions referenced by the "data-rendered"
-	         * attribute. Referenced functions should be defined in this view and
-	         * they has to accept one parameter - a reference to the rendered
-	         * element.
-	         */
-	        _renderElement : function(elm, render, list) {
-	            var visit = true;
-	            if (render !== false) {
-	                if (elm.attr('data-rendered')) {
-	                    list.push(elm);
-	                }
-	                var result = this._callReferencedMethod(elm, 'data-render',
-	                        'renderDefault');
-	                visit = result !== false;
-	            }
-	            if (visit) {
-	                var children = _.toArray(elm.children());
-	                _.each(children, function(elm) {
-	                    this._renderElement($(elm), true, list);
-	                }, this);
-	            }
-	            this.triggerMethod('render');
-	        },
-
-	        /**
-	         * Binds event listeners referenced in "data-action-xxx" element
-	         * attributes (where "xxx" is "click", "mouseover", "mouseout", "focus",
-	         * "blur", "keypress", "keydown", "keyup"...).
-	         */
-	        _bindEventListeners : function() {
-	            var actions = [ 'click', 'mouseover', 'mouseout', 'focus', 'blur',
-	                    'keypress', 'keydown', 'keyup' ];
-	            var element = this.getElement();
-	            _.each(actions, function(action) {
-	                this.bindListeners(element, action);
-	            }, this);
-	        },
-
-	        /**
-	         * Renders the topmost element. This method is called from the public
-	         * "render" method (see the description in this method). This method
-	         * does not fires any events.
-	         */
-	        _render : function() {
-	            var that = this;
-	            var element = that.getElement();
-	            that._renderTemplate();
-	            if (that.className) {
-	                element.attr('class', that.className);
-	            }
-	            that.renderElement(element);
-	            return that;
-	        },
-
-	        /**
-	         * Visualizes data using the internal template (if it is defined in this
-	         * view).
-	         */
-	        _renderTemplate : function() {
-	            var that = this;
-	            var template = that.template;
-	            if (!template) return;
-	            var options = _.extend({}, that.options, {
-	                view : that
-	            });
-	            if (_.isString(template)) {
-	                template = _.template(template);
-	            }
-	            var html = template(options);
-	            var element = that.getElement();
-	            element.html(html);
-	        }
-
-	    });
-
-	    /**
-	     * Extends the specified TemplateView object with the HTML content defined
-	     * in the given element and with methods defined in "script" elements marked
-	     * by attributes "data-type" equal to "methods" (for instance methods) and
-	     * "const" for static methods.
-	     */
-	    Mosaic.TemplateView.extendViewType = function(e, View) {
-	        e = $(e).clone();
-	        View = View || this.extend({});
-
-	        // Define static constants
-	        var scripts = e.find('script[data-type="static"]');
-	        _.each(Mosaic.elementToObject(scripts), function(obj) {
-	            _.extend(View, obj);
-	        }, this);
-	        scripts.remove();
-
-	        // Define template methods
-	        scripts = e.find('script');
-	        _.each(Mosaic.elementToObject(scripts), function(obj) {
-	            _.extend(View.prototype, obj);
-	        }, this);
-	        // Remove all scripts
-	        scripts.remove();
-
-	        // The rest of the code is used as a template
-	        var html = e.html();
-	        html = Mosaic.Utils.trim(html);
-	        if (html && html !== '') {
-	            View.prototype.template = html;
-	        }
-	        return View;
-	    };
 
 	    /* ------------------------------------------------- */
 
@@ -2227,7 +1607,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	        getResource : function() {
 	            return this.options.resource;
 	        },
-	        /** Returns the data set managing the underlying resource */
+	        /**
+	         * Returns the data set managing the underlying resource
+	         */
 	        getDataSet : function() {
 	            return this.options.dataSet;
 	        },
@@ -2239,11 +1621,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	     * This is an utility class which is used to control the state of popup
 	     * windows on the map.
 	     */
-	    Mosaic.MapPopupControl = Mosaic.Class.extend({
+	    Mosaic.MapPopupControl = Mosaic.ParentClass.extend({
 
 	        /** Initializes this object */
 	        initialize : function(options) {
-	            this.setOptions(options);
 	        },
 
 	        /**
@@ -2256,13 +1637,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	            options = options || {};
 	            if (!_.isFunction(options.action) || //
 	            !that._checkPriority(options)) {
-	                return Mosaic.Promise();
+	                return Mosaic.P();
 	            } else {
 	                return that.close(options).then(function(result) {
 	                    that._priority = options.priority || 0;
 	                    return options.action();
 	                }).then(function(deferred) {
-	                    that._deferred = deferred || new Mosaic.Promise.defer();
+	                    that._deferred = deferred || new Mosaic.P.defer();
 	                    var promise = that._deferred.promise;
 	                    promise.then(function() {
 	                        that._priority = 0;
@@ -2281,7 +1662,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            var that = this;
 	            var result = false;
 	            options = options || {};
-	            var promise = Mosaic.Promise();
+	            var promise = Mosaic.P();
 	            if (that._checkPriority(options)) {
 	                result = true;
 	                if (that._deferred) {
@@ -2478,11 +1859,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	     * An abstract ViewAdapter used as a superclass for all DataSet - View
 	     * adapters.
 	     */
-	    Mosaic.ViewAdapter = Mosaic.Class.extend({
-
-	        stopListening : Mosaic.Mixins.stopListening,
-
-	        listenTo : Mosaic.Mixins.listenTo,
+	    Mosaic.ViewAdapter = Mosaic.ParentClass.extend({
 
 	        initialize : function(options) {
 	            this.setOptions(options);
@@ -2557,7 +1934,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	            this._viewIndex[resourceId] = view;
 	        },
 
-	        /** Removes the specified view from the internal index */
+	        /**
+	         * Removes the specified view from the internal index
+	         */
 	        _removeResourceViewFromIndex : function(view) {
 	            if (!view || !view.getResource) return;
 	            var resource = view.getResource();
@@ -2577,7 +1956,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	            this._viewIndex = {};
 	        },
 
-	        /** Returns a view corresponding to the specified resource */
+	        /**
+	         * Returns a view corresponding to the specified resource
+	         */
 	        _getResourceView : function(resource) {
 	            var resourceId = this._dataSet.getResourceId(resource);
 	            return this._viewIndex[resourceId];
@@ -2591,7 +1972,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	     * on the map. Used by the Mosaic.GeoJsonMapViewAdapter class to visualize
 	     * resources.
 	     */
-	    Mosaic.MapFigureOptions = Mosaic.Class.extend({
+	    Mosaic.MapFigureOptions = Mosaic.ParentClass.extend({
 	        type : 'MapFigureOptions'
 	    });
 
@@ -2707,7 +2088,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	            return value;
 	        },
 
-	        /** This method renders the underlying data set on the view. */
+	        /**
+	         * This method renders the underlying data set on the view.
+	         */
 	        renderView : function() {
 	            var that = this;
 	            that._unbindDataEventListeners();
@@ -2785,19 +2168,21 @@ return /******/ (function(modules) { // webpackBootstrap
 	            var that = this;
 	            var resource = that._dataSet.getResourceFromEvent(e);
 	            var resourceId = that._dataSet.getResourceId(resource);
-	            if (!resource || !resourceId) return Mosaic.Promise(false);
+	            if (!resource || !resourceId) return Mosaic.P(false);
 
-	            // Exit if there is no layers corresponding to the
+	            // Exit if there is no layers corresponding to
+	            // the
 	            // specified resource
 	            var layer = that._getResourceLayer(resource);
 
 	            /* Creates a view for this resource */
 	            var view = that.newResourceView(AdapterType, resource);
 
-	            // Exit if there is no visualization defined for the
+	            // Exit if there is no visualization defined for
+	            // the
 	            // current resource type
 	            if (!view) {
-	                return Mosaic.Promise(false);
+	                return Mosaic.P(false);
 	            }
 
 	            // Render the view
@@ -2838,7 +2223,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	                // Prepare the resulting deferred object
 	                // It is used to close the popup
-	                var deferred = Mosaic.Promise.defer();
+	                var deferred = Mosaic.P.defer();
 	                popup.on('close', function() {
 	                    deferred.resolve();
 	                });
@@ -3244,7 +2629,9 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	    /* ------------------------------------------------- */
 
-	    /** Full view. Used to visualize individual resources in expanded mode. */
+	    /**
+	     * Full view. Used to visualize individual resources in expanded mode.
+	     */
 	    Mosaic.ExpandedView = Mosaic.DataSetView.extend({
 	        type : 'ExpandedView',
 	        setResourceView : function(view) {
@@ -3274,7 +2661,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	    /* ------------------------------------------------- */
 
-	    Mosaic.MapTilesLoader = Mosaic.Class.extend({
+	    Mosaic.MapTilesLoader = Mosaic.ParentClass.extend({
 
 	        initialize : function(options) {
 	            this.setOptions(options);
@@ -3300,7 +2687,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        loadTiles : function(zoom, points) {
 	            var that = this;
 	            var tiles = [];
-	            return Mosaic.Promise.all(_.map(points, function(point) {
+	            return Mosaic.P.all(_.map(points, function(point) {
 	                var idx = tiles.length;
 	                tiles.push(null);
 	                return that.loadTile(zoom, point).then(function(tile) {
@@ -3318,7 +2705,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            var that = this;
 	            var key = that._getKey(zoom, point);
 	            var tile = that._cache[key];
-	            if (tile) return Mosaic.Promise(tile);
+	            if (tile) return Mosaic.P(tile);
 	            return that._loadTile(zoom, point).then(function(tile) {
 	                that._cache[key] = tile;
 	                return tile;
@@ -3364,7 +2751,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	     * Common superclass for all map layers loading tiles using an external
 	     * loader object.
 	     */
-	    Mosaic.MapTiles = Mosaic.Class.extend({
+	    Mosaic.MapTiles = Mosaic.ParentClass.extend({
 
 	        /** Initializes this layer */
 	        initialize : function(options) {
@@ -3432,7 +2819,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	         * 'queue' parameter of this method.
 	         */
 	        _loadTiles : function(zoom, queue) {
-	            return Mosaic.Promise().then(function() {
+	            return Mosaic.P().then(function() {
 	                throw new Error('Not implemented');
 	            });
 	        },
@@ -3836,7 +3223,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	                url : utfgridUrl
 	            });
 	            function toObject(value) {
-	                // FIXME: it should be defined at the server side
+	                // FIXME: it should be defined at the server
+	                // side
 	                if (_.isString(value)) {
 	                    try {
 	                        value = JSON.parse(value);
@@ -3898,7 +3286,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	        /* -------------------------- */
 	        /* Individual event listeners */
 
-	        /** This method is called when the dataset recieves an 'show' event */
+	        /**
+	         * This method is called when the dataset recieves an 'show' event
+	         */
 	        _onShow : function(e) {
 	            if (e.showTiles) {
 	                this._setTilesLayerVisibility(true);
@@ -3908,7 +3298,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	            }
 	        },
 
-	        /** This method is called when the dataset recieves an 'hide' event */
+	        /**
+	         * This method is called when the dataset recieves an 'hide' event
+	         */
 	        _onHide : function(e) {
 	            if (e.hideTiles) {
 	                this._setTilesLayerVisibility(false);
@@ -3942,12 +3334,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	     */
 	    Mosaic.registerMapOptions = function(html) {
 	        html = $(html);
-	        // This method recursively iterates over all parent elements and add
+	        // This method recursively iterates over all parent elements
+	        // and add
 	        // all parameters defined in these elements.
 	        function extendOptions(options, el, set) {
 	            var id = el.attr('id') || _.uniqueId('template-');
 	            el.attr('id', id);
-	            // Check that the element id was not visited yet (to avoid
+	            // Check that the element id was not visited yet (to
+	            // avoid
 	            // infinite reference loops)
 	            set = set || {};
 	            if (id in set) return options;
@@ -3981,12 +3375,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	     */
 	    Mosaic.registerViewAdapters = function(html) {
 	        html = $(html);
-	        // This method recursively iterates over all parent elements and add
+	        // This method recursively iterates over all parent elements
+	        // and add
 	        // all methods defined in these elements.
 	        function extendViewType(ViewType, el, set) {
 	            var id = el.attr('id') || _.uniqueId('template-');
 	            el.attr('id', id);
-	            // Check that the element id was not visited yet (to avoid
+	            // Check that the element id was not visited yet (to
+	            // avoid
 	            // infinite reference loops).
 	            set = set || {};
 	            if (id in set) return ViewType;
@@ -4014,7 +3410,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	     * This class is used to configure an application using HTML elements as a
 	     * source of references to DataSets, templates etc.
 	     */
-	    Mosaic.AppConfigurator = Mosaic.Class.extend({
+	    Mosaic.AppConfigurator = Mosaic.ParentClass.extend({
 	        /**
 	         * This method initializes this object. It loads templates, loads
 	         * datasets, activates all view panels, etc
@@ -4049,6 +3445,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            var dataSet = new Mosaic.GeoJsonDataSet(options);
 	            this.app.addDataSet(dataSet);
 	        },
+
 	        /**
 	         * This method loads and registers all templates for application types.
 	         * The main element containing templates is referenced by the
@@ -4165,7 +3562,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	            return id;
 	        },
 
-	        /** Extracts common dataset options from the specified element */
+	        /**
+	         * Extracts common dataset options from the specified element
+	         */
 	        _extractDataSetOptions : function(elm) {
 	            var that = this;
 	            var id = elm.data('map-layer');
@@ -4351,6 +3750,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	    adapters.registerAdapter(Mosaic.ExpandedView, Mosaic.GeoJsonDataSet,
 	            Mosaic.GeoJsonExpandedViewAdapter);
 
+	    return Mosaic;
+
 	})(this);
 
 /***/ },
@@ -4369,14 +3770,501 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 4 */
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = __webpack_require__(7);
-	__webpack_require__(8);
-	__webpack_require__(9);
-	__webpack_require__(10);
-	__webpack_require__(11);
+	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;(function(define) {
+	    "use strict";
+	    !(__WEBPACK_AMD_DEFINE_ARRAY__ = [ __webpack_require__(2), __webpack_require__(6) ], __WEBPACK_AMD_DEFINE_RESULT__ = (function(_, Mosaic) {
+
+	        /**
+	         * An adapter manager used to register/retrieve objects corresponding to
+	         * the types of adaptable object and the types of the target object.
+	         * This object is used by views to get view adapters.
+	         */
+	        Mosaic.AdapterManager = Mosaic.Class.extend({
+
+	            /** Initializes this object */
+	            initialize : function() {
+	                this._adapters = {};
+	            },
+
+	            /**
+	             * Returns a key used to find adapters of one type to another.
+	             * 
+	             * @param from
+	             *            the type of the adaptable object
+	             * @param to
+	             *            type of the target object
+	             */
+	            _getKey : function(from, to) {
+	                var fromType = getTypeId(from);
+	                var toType = getTypeId(to);
+	                return fromType + '-' + toType;
+	            },
+
+	            /**
+	             * Registers a new adapter from one type to another.
+	             * 
+	             * @param from
+	             *            the type of the adaptable object
+	             * @param to
+	             *            type of the target object
+	             * @param adapter
+	             *            the adapter type
+	             */
+	            registerAdapter : function(from, to, adapter) {
+	                var key = this._getKey(from, to);
+	                this._adapters[key] = adapter;
+	            },
+
+	            /** Returns an adapter of one object type to another type. */
+	            getAdapter : function(from, to) {
+	                var key = this._getKey(from, to);
+	                return this._adapters[key];
+	            },
+
+	            /**
+	             * Creates and returns a new adapter from one type to another. If
+	             * the registered adapter is a function then it is used as
+	             * constructor to create a new object.
+	             */
+	            newAdapterInstance : function(from, to, options) {
+	                var AdapterType = this.getAdapter(from, to);
+	                var result = null;
+	                if (_.isFunction(AdapterType)) {
+	                    options = options || {};
+	                    if (this._checkValidity(AdapterType, options)) {
+	                        if (_.isFunction(AdapterType.initialize)) {
+	                            AdapterType.initialize(options);
+	                        }
+	                        result = new AdapterType(options);
+	                        if (!this._checkValidity(result, options)) {
+	                            result = null;
+	                        }
+	                    }
+	                } else {
+	                    result = AdapterType;
+	                }
+	                return result;
+	            },
+
+	            /** Removes an adapter from one type to another. */
+	            removeAdapter : function(from, to) {
+	                var key = this._getKey(from, to);
+	                var result = this._adapters[key];
+	                delete this._adapters[key];
+	                return result;
+	            },
+
+	            /**
+	             * Checks if option values are valid using validation methods on the
+	             * specified object
+	             */
+	            _checkValidity : function(obj, options) {
+	                if (!_.isFunction(obj.isValid)) return true;
+	                var result = obj.isValid(options);
+	                return result;
+	            }
+	        });
+
+	        /** Returns the type of the specified resource. */
+	        Mosaic.AdapterManager.getTypeId = getTypeId;
+	        function getTypeId(obj) {
+	            var type;
+	            if (_.isString(obj)) {
+	                type = obj;
+	            } else {
+	                var o = obj;
+	                if (_.isFunction(obj)) {
+	                    o = obj.prototype;
+	                }
+	                type = o.type = o.type || _.uniqueId('type-');
+	            }
+	            return type;
+	            
+	            var typeId;
+	            if (_.isString(obj)) {
+	                typeId = obj;
+	            } else if (obj.type) {
+	                typeId = obj.type;
+	            }
+	            if (!_.isString(typeId)) {
+	                var type;
+	                if (_.isFunction(obj)) {
+	                    type = _.isFunction(obj.getClass) ? obj.getClass()
+	                            : obj['class'];
+	                }
+	                if (type) {
+	                    typeId = type._typeId;
+	                }
+	            }
+	            return typeId;
+	        }
+
+	        /**
+	         * A static method returning the singlethon instance of the
+	         * AdapterManager.
+	         */
+	        Mosaic.AdapterManager.getInstance = function() {
+	            if (!this._instance) {
+	                this._instance = new Mosaic.AdapterManager();
+	            }
+	            return this._instance;
+	        };
+
+	        /**
+	         * This mixin method should be added to individual types to enable
+	         * registering type-specific resource extensions. This method iterates
+	         * over the specified resource types and registers the corresponding
+	         * adapters. The type of the adapter is the same as the class where this
+	         * mixin is added.
+	         */
+	        Mosaic._registerTypeAdapters = function(config) {
+	            var adapterManager = Mosaic.AdapterManager.getInstance();
+	            _.each(config, function(value, type) {
+	                adapterManager.registerAdapter(type, this, value);
+	            }, this);
+	        };
+
+	        return Mosaic.AdapterManager;
+
+	    }.apply(null, __WEBPACK_AMD_DEFINE_ARRAY__)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+	})(__webpack_require__(9));
+
 
 /***/ },
 /* 5 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;(function(define) {
+	    "use strict";
+	    !(__WEBPACK_AMD_DEFINE_ARRAY__ = [ __webpack_require__(2), __webpack_require__(3), __webpack_require__(6) ], __WEBPACK_AMD_DEFINE_RESULT__ = (function(_, $, Mosaic) {
+
+	        /**
+	         * Converts the text content of the specified element into a JS object.
+	         * This utility method could be used to convert JS code defined in
+	         * <code>&lt;script>..&lt;script></code> elements into an object.
+	         */
+	        Mosaic.elementToObject = function(e) {
+	            var results = [];
+	            var that = this;
+	            e.each(function() {
+	                try {
+	                    var text = $(this).text();
+	                    text = Mosaic.Utils.trim(text);
+	                    text = '( ' + text + ')';
+	                    var handle = eval;
+	                    var obj = handle(text);
+	                    if (_.isFunction(obj)) {
+	                        obj = obj();
+	                    }
+	                    results.push(obj);
+	                } catch (e) {
+	                    console.log('ERROR!', e.stack);
+	                }
+	            });
+	            return results;
+	        };
+
+	        /**
+	         * Template-based view. It uses HTML templates to represent information.
+	         */
+	        Mosaic.TemplateView = Mosaic.Class.extend({
+
+	            /** Name of this type */
+	            type : 'TemplateView',
+
+	            /**
+	             * Trigger events and calls onXxx methods on this object.
+	             */
+	            triggerMethod : Mosaic.Events.triggerMethod,
+
+	            /** Listens to events produced by external objects */
+	            listenTo : Mosaic.Events.listenTo,
+
+	            /**
+	             * Removes all event listeners produced by external objects.
+	             */
+	            stopListening : Mosaic.Events.stopListening,
+
+	            /** Initializes this object. */
+	            initialize : function(options) {
+	                Mosaic.Events.apply(this, arguments);
+	                this.setOptions(options);
+	                this.triggerMethod('initialize');
+	            },
+
+	            /**
+	             * Returns the topmost DOM element of this view.
+	             */
+	            getElement : function() {
+	                if (!this.$el) {
+	                    var el = this.options.el || '<div></div>';
+	                    this.$el = $(el);
+	                }
+	                return this.$el;
+	            },
+
+	            /**
+	             * This is a default rendering method which is called if a method
+	             * referenced in the "data-render" attribute was not found.
+	             */
+	            renderDefault : function(el, methodName) {
+	                var err = new Error('[' + methodName + //
+	                ']: Renderer method not found.');
+	                console.log(err.stack, el);
+	            },
+
+	            /**
+	             * This is a default method which is called after rendering if a
+	             * method referenced in the "data-rendered" attribute was not found.
+	             */
+	            renderedDefault : function(el, methodName) {
+	                var err = new Error('[' + methodName + ']: Method called ' + //
+	                'after the rendering process ' + 'is not defined.');
+	                console.log(err.stack, el);
+	            },
+
+	            /**
+	             * Default method used to handle events for which no specific
+	             * handlers were defined.
+	             */
+	            handleDefault : function(el, methodName) {
+	                var err = new Error('[' + methodName + //
+	                ']: A handler method with such a name ' + //
+	                'was not found.');
+	                console.log(err.stack, el);
+	            },
+
+	            /**
+	             * Public method rendering the specified element. This method seeks
+	             * all elements containing "data-render" attributes and calls
+	             * functions referenced by this attribute. When the rendering
+	             * process is finished then this method calls all functions
+	             * referenced by the "data-rendered" attribute. Referenced functions
+	             * should be defined in this view and they has to accept one
+	             * parameter - a reference to the rendered element.
+	             */
+	            renderElement : function(elm, render) {
+	                var list = [];
+	                this._renderElement(elm, render, list);
+	                // Notify about the end of the rendering process
+	                _.each(list, function(e) {
+	                    this._callReferencedMethod(e, 'data-rendered',
+	                            'renderedDefault');
+	                }, this);
+	            },
+
+	            /**
+	             * Binds event listeners to elements marked by "data-action-xxx"
+	             * attributes (where "xxx" is the name of the action). The value of
+	             * this action attributes should reference event listeners defined
+	             * in this view. Example:
+	             * <code>&lt;div data-action-click="sayHello">Hello&lt;/div></code>
+	             */
+	            bindListeners : function(elm, event, attrName) {
+	                var element = elm[0];
+	                if (!element) return;
+	                if (attrName === undefined) {
+	                    attrName = 'data-action-' + event;
+	                }
+	                var that = this;
+	                var selector = '[' + attrName + ']';
+	                elm.on(event, selector, function(ev) {
+	                    var e = $(ev.currentTarget);
+	                    var actionName = e.attr(attrName);
+	                    var action = that[actionName];
+	                    if (_.isFunction(action)) {
+	                        action.call(that, ev, e);
+	                    } else {
+	                        that.handleDefault(e, actionName);
+	                    }
+	                });
+	            },
+
+	            /**
+	             * This method renders this view. It performs the following actions:
+	             * 1) it takes the topmost element of this class (using the
+	             * "getElement" method) 2) If there is a "template" field defined in
+	             * this object then it is used as a source for the
+	             * underscore#template method to render the content; the result of
+	             * template rendering is appended to the view's element. 3) This
+	             * method calls all functions referenced in the "data-render" fields
+	             * 4) After rendering it calls functions referenced in the
+	             * "data-rendered" element attributes (to finalize the rendering
+	             * process). 5) It attaches event listeners referenced by the
+	             * "data-action-xxx" attributes.
+	             */
+	            render : function() {
+	                var that = this;
+	                that.triggerMethod('render:begin');
+	                that._render();
+	                that._bindEventListeners();
+	                that.triggerMethod('render:end');
+	                return this;
+	            },
+
+	            /**
+	             * Removes all registered listeners and removes this view from DOM.
+	             */
+	            remove : function() {
+	                this.triggerMethod('remove');
+	                this.stopListening();
+	                var element = this.getElement();
+	                element.remove();
+	                return this;
+	            },
+
+	            /* ----------------------------- */
+
+	            /**
+	             * This method calls a method of this view referenced by the
+	             * specified element attribute.
+	             */
+	            _callReferencedMethod : function(elm, field, def) {
+	                var result = null;
+	                var methodName = elm.attr(field);
+	                if (methodName) {
+	                    var method = this[methodName] || this[def];
+	                    elm.removeAttr(field);
+	                    if (method) {
+	                        result = method.call(this, elm, methodName);
+	                    }
+	                }
+	                return result;
+	            },
+
+	            /**
+	             * This internal method renders the specified element. It is called
+	             * by the public "renderElement" method. This method seeks all
+	             * elements containing "data-render" attributes and calls functions
+	             * referenced by this attribute. When the rendering process is
+	             * finished then this method calls all functions referenced by the
+	             * "data-rendered" attribute. Referenced functions should be defined
+	             * in this view and they has to accept one parameter - a reference
+	             * to the rendered element.
+	             */
+	            _renderElement : function(elm, render, list) {
+	                var visit = true;
+	                if (render !== false) {
+	                    if (elm.attr('data-rendered')) {
+	                        list.push(elm);
+	                    }
+	                    var result = this._callReferencedMethod(elm, 'data-render',
+	                            'renderDefault');
+	                    visit = result !== false;
+	                }
+	                if (visit) {
+	                    var children = _.toArray(elm.children());
+	                    _.each(children, function(elm) {
+	                        this._renderElement($(elm), true, list);
+	                    }, this);
+	                }
+	                this.triggerMethod('render');
+	            },
+
+	            /**
+	             * Binds event listeners referenced in "data-action-xxx" element
+	             * attributes (where "xxx" is "click", "mouseover", "mouseout",
+	             * "focus", "blur", "keypress", "keydown", "keyup"...).
+	             */
+	            _bindEventListeners : function() {
+	                var actions = [ 'click', 'mouseover', 'mouseout', 'focus',
+	                        'blur', 'keypress', 'keydown', 'keyup' ];
+	                var element = this.getElement();
+	                _.each(actions, function(action) {
+	                    this.bindListeners(element, action);
+	                }, this);
+	            },
+
+	            /**
+	             * Renders the topmost element. This method is called from the
+	             * public "render" method (see the description in this method). This
+	             * method does not fires any events.
+	             */
+	            _render : function() {
+	                var that = this;
+	                var element = that.getElement();
+	                that._renderTemplate();
+	                if (that.className) {
+	                    element.attr('class', that.className);
+	                }
+	                that.renderElement(element);
+	                return that;
+	            },
+
+	            /**
+	             * Visualizes data using the internal template (if it is defined in
+	             * this view).
+	             */
+	            _renderTemplate : function() {
+	                var that = this;
+	                var template = that.template;
+	                if (!template) return;
+	                var options = _.extend({}, that.options, {
+	                    view : that
+	                });
+	                if (_.isString(template)) {
+	                    template = _.template(template);
+	                }
+	                var html = template(options);
+	                var element = that.getElement();
+	                element.html(html);
+	            }
+
+	        });
+	        // Static methods
+	        _.extend(Mosaic.TemplateView, Mosaic.Class);
+
+	        /**
+	         * Extends the specified TemplateView object with the HTML content
+	         * defined in the given element and with methods defined in "script"
+	         * elements marked by attributes "data-type" equal to "methods" (for
+	         * instance methods) and "const" for static methods.
+	         */
+	        Mosaic.TemplateView.extendViewType = function(e, View) {
+	            e = $(e).clone();
+	            View = View || this.extend({});
+
+	            // Define static constants
+	            var scripts = e.find('script[data-type="static"]');
+	            _.each(Mosaic.elementToObject(scripts), function(obj) {
+	                _.extend(View, obj);
+	            }, this);
+	            scripts.remove();
+
+	            // Define template methods
+	            scripts = e.find('script');
+	            _.each(Mosaic.elementToObject(scripts), function(obj) {
+	                _.extend(View.prototype, obj);
+	            }, this);
+	            // Remove all scripts
+	            scripts.remove();
+
+	            // The rest of the code is used as a template
+	            var html = e.html();
+	            html = Mosaic.Utils.trim(html);
+	            if (html && html !== '') {
+	                View.prototype.template = html;
+	            }
+	            return View;
+	        };
+	        
+	        return Mosaic.TemplateView;
+	    }.apply(null, __WEBPACK_AMD_DEFINE_ARRAY__)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+	})(__webpack_require__(9));
+
+
+/***/ },
+/* 6 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = __webpack_require__(10);
+	__webpack_require__(11);
+	__webpack_require__(12);
+	__webpack_require__(13);
+	__webpack_require__(14);
+
+/***/ },
+/* 7 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_RESULT__;/*
@@ -13561,7 +13449,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	}(window, document));
 
 /***/ },
-/* 6 */
+/* 8 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/*
@@ -13572,17 +13460,24 @@ return /******/ (function(modules) { // webpackBootstrap
 	!function(t,e){L.MarkerClusterGroup=L.FeatureGroup.extend({options:{maxClusterRadius:80,iconCreateFunction:null,spiderfyOnMaxZoom:!0,showCoverageOnHover:!0,zoomToBoundsOnClick:!0,singleMarkerMode:!1,disableClusteringAtZoom:null,removeOutsideVisibleBounds:!0,animateAddingMarkers:!1,spiderfyDistanceMultiplier:1,polygonOptions:{}},initialize:function(t){L.Util.setOptions(this,t),this.options.iconCreateFunction||(this.options.iconCreateFunction=this._defaultIconCreateFunction),this._featureGroup=L.featureGroup(),this._featureGroup.on(L.FeatureGroup.EVENTS,this._propagateEvent,this),this._nonPointGroup=L.featureGroup(),this._nonPointGroup.on(L.FeatureGroup.EVENTS,this._propagateEvent,this),this._inZoomAnimation=0,this._needsClustering=[],this._needsRemoving=[],this._currentShownBounds=null,this._queue=[]},addLayer:function(t){if(t instanceof L.LayerGroup){var e=[];for(var i in t._layers)e.push(t._layers[i]);return this.addLayers(e)}if(!t.getLatLng)return this._nonPointGroup.addLayer(t),this;if(!this._map)return this._needsClustering.push(t),this;if(this.hasLayer(t))return this;this._unspiderfy&&this._unspiderfy(),this._addLayer(t,this._maxZoom);var n=t,s=this._map.getZoom();if(t.__parent)for(;n.__parent._zoom>=s;)n=n.__parent;return this._currentShownBounds.contains(n.getLatLng())&&(this.options.animateAddingMarkers?this._animationAddLayer(t,n):this._animationAddLayerNonAnimated(t,n)),this},removeLayer:function(t){if(t instanceof L.LayerGroup){var e=[];for(var i in t._layers)e.push(t._layers[i]);return this.removeLayers(e)}return t.getLatLng?this._map?t.__parent?(this._unspiderfy&&(this._unspiderfy(),this._unspiderfyLayer(t)),this._removeLayer(t,!0),this._featureGroup.hasLayer(t)&&(this._featureGroup.removeLayer(t),t.setOpacity&&t.setOpacity(1)),this):this:(!this._arraySplice(this._needsClustering,t)&&this.hasLayer(t)&&this._needsRemoving.push(t),this):(this._nonPointGroup.removeLayer(t),this)},addLayers:function(t){var e,i,n,s=this._map,r=this._featureGroup,o=this._nonPointGroup;for(e=0,i=t.length;i>e;e++)if(n=t[e],n.getLatLng){if(!this.hasLayer(n))if(s){if(this._addLayer(n,this._maxZoom),n.__parent&&2===n.__parent.getChildCount()){var a=n.__parent.getAllChildMarkers(),h=a[0]===n?a[1]:a[0];r.removeLayer(h)}}else this._needsClustering.push(n)}else o.addLayer(n);return s&&(r.eachLayer(function(t){t instanceof L.MarkerCluster&&t._iconNeedsUpdate&&t._updateIcon()}),this._topClusterLevel._recursivelyAddChildrenToMap(null,this._zoom,this._currentShownBounds)),this},removeLayers:function(t){var e,i,n,s=this._featureGroup,r=this._nonPointGroup;if(!this._map){for(e=0,i=t.length;i>e;e++)n=t[e],this._arraySplice(this._needsClustering,n),r.removeLayer(n);return this}for(e=0,i=t.length;i>e;e++)n=t[e],n.__parent?(this._removeLayer(n,!0,!0),s.hasLayer(n)&&(s.removeLayer(n),n.setOpacity&&n.setOpacity(1))):r.removeLayer(n);return this._topClusterLevel._recursivelyAddChildrenToMap(null,this._zoom,this._currentShownBounds),s.eachLayer(function(t){t instanceof L.MarkerCluster&&t._updateIcon()}),this},clearLayers:function(){return this._map||(this._needsClustering=[],delete this._gridClusters,delete this._gridUnclustered),this._noanimationUnspiderfy&&this._noanimationUnspiderfy(),this._featureGroup.clearLayers(),this._nonPointGroup.clearLayers(),this.eachLayer(function(t){delete t.__parent}),this._map&&this._generateInitialClusters(),this},getBounds:function(){var t=new L.LatLngBounds;if(this._topClusterLevel)t.extend(this._topClusterLevel._bounds);else for(var e=this._needsClustering.length-1;e>=0;e--)t.extend(this._needsClustering[e].getLatLng());return t.extend(this._nonPointGroup.getBounds()),t},eachLayer:function(t,e){var i,n=this._needsClustering.slice();for(this._topClusterLevel&&this._topClusterLevel.getAllChildMarkers(n),i=n.length-1;i>=0;i--)t.call(e,n[i]);this._nonPointGroup.eachLayer(t,e)},getLayers:function(){var t=[];return this.eachLayer(function(e){t.push(e)}),t},getLayer:function(t){var e=null;return this.eachLayer(function(i){L.stamp(i)===t&&(e=i)}),e},hasLayer:function(t){if(!t)return!1;var e,i=this._needsClustering;for(e=i.length-1;e>=0;e--)if(i[e]===t)return!0;for(i=this._needsRemoving,e=i.length-1;e>=0;e--)if(i[e]===t)return!1;return!(!t.__parent||t.__parent._group!==this)||this._nonPointGroup.hasLayer(t)},zoomToShowLayer:function(t,e){var i=function(){if((t._icon||t.__parent._icon)&&!this._inZoomAnimation)if(this._map.off("moveend",i,this),this.off("animationend",i,this),t._icon)e();else if(t.__parent._icon){var n=function(){this.off("spiderfied",n,this),e()};this.on("spiderfied",n,this),t.__parent.spiderfy()}};t._icon&&this._map.getBounds().contains(t.getLatLng())?e():t.__parent._zoom<this._map.getZoom()?(this._map.on("moveend",i,this),this._map.panTo(t.getLatLng())):(this._map.on("moveend",i,this),this.on("animationend",i,this),this._map.setView(t.getLatLng(),t.__parent._zoom+1),t.__parent.zoomToBounds())},onAdd:function(t){this._map=t;var e,i,n;if(!isFinite(this._map.getMaxZoom()))throw"Map has no maxZoom specified";for(this._featureGroup.onAdd(t),this._nonPointGroup.onAdd(t),this._gridClusters||this._generateInitialClusters(),e=0,i=this._needsRemoving.length;i>e;e++)n=this._needsRemoving[e],this._removeLayer(n,!0);for(this._needsRemoving=[],e=0,i=this._needsClustering.length;i>e;e++)n=this._needsClustering[e],n.getLatLng?n.__parent||this._addLayer(n,this._maxZoom):this._featureGroup.addLayer(n);this._needsClustering=[],this._map.on("zoomend",this._zoomEnd,this),this._map.on("moveend",this._moveEnd,this),this._spiderfierOnAdd&&this._spiderfierOnAdd(),this._bindEvents(),this._zoom=this._map.getZoom(),this._currentShownBounds=this._getExpandedVisibleBounds(),this._topClusterLevel._recursivelyAddChildrenToMap(null,this._zoom,this._currentShownBounds)},onRemove:function(t){t.off("zoomend",this._zoomEnd,this),t.off("moveend",this._moveEnd,this),this._unbindEvents(),this._map._mapPane.className=this._map._mapPane.className.replace(" leaflet-cluster-anim",""),this._spiderfierOnRemove&&this._spiderfierOnRemove(),this._hideCoverage(),this._featureGroup.onRemove(t),this._nonPointGroup.onRemove(t),this._featureGroup.clearLayers(),this._map=null},getVisibleParent:function(t){for(var e=t;e&&!e._icon;)e=e.__parent;return e||null},_arraySplice:function(t,e){for(var i=t.length-1;i>=0;i--)if(t[i]===e)return t.splice(i,1),!0},_removeLayer:function(t,e,i){var n=this._gridClusters,s=this._gridUnclustered,r=this._featureGroup,o=this._map;if(e)for(var a=this._maxZoom;a>=0&&s[a].removeObject(t,o.project(t.getLatLng(),a));a--);var h,_=t.__parent,u=_._markers;for(this._arraySplice(u,t);_&&(_._childCount--,!(_._zoom<0));)e&&_._childCount<=1?(h=_._markers[0]===t?_._markers[1]:_._markers[0],n[_._zoom].removeObject(_,o.project(_._cLatLng,_._zoom)),s[_._zoom].addObject(h,o.project(h.getLatLng(),_._zoom)),this._arraySplice(_.__parent._childClusters,_),_.__parent._markers.push(h),h.__parent=_.__parent,_._icon&&(r.removeLayer(_),i||r.addLayer(h))):(_._recalculateBounds(),i&&_._icon||_._updateIcon()),_=_.__parent;delete t.__parent},_isOrIsParent:function(t,e){for(;e;){if(t===e)return!0;e=e.parentNode}return!1},_propagateEvent:function(t){if(t.layer instanceof L.MarkerCluster){if(t.originalEvent&&this._isOrIsParent(t.layer._icon,t.originalEvent.relatedTarget))return;t.type="cluster"+t.type}this.fire(t.type,t)},_defaultIconCreateFunction:function(t){var e=t.getChildCount(),i=" marker-cluster-";return i+=10>e?"small":100>e?"medium":"large",new L.DivIcon({html:"<div><span>"+e+"</span></div>",className:"marker-cluster"+i,iconSize:new L.Point(40,40)})},_bindEvents:function(){var t=this._map,e=this.options.spiderfyOnMaxZoom,i=this.options.showCoverageOnHover,n=this.options.zoomToBoundsOnClick;(e||n)&&this.on("clusterclick",this._zoomOrSpiderfy,this),i&&(this.on("clustermouseover",this._showCoverage,this),this.on("clustermouseout",this._hideCoverage,this),t.on("zoomend",this._hideCoverage,this))},_zoomOrSpiderfy:function(t){var e=this._map;e.getMaxZoom()===e.getZoom()?this.options.spiderfyOnMaxZoom&&t.layer.spiderfy():this.options.zoomToBoundsOnClick&&t.layer.zoomToBounds(),t.originalEvent&&13===t.originalEvent.keyCode&&e._container.focus()},_showCoverage:function(t){var e=this._map;this._inZoomAnimation||(this._shownPolygon&&e.removeLayer(this._shownPolygon),t.layer.getChildCount()>2&&t.layer!==this._spiderfied&&(this._shownPolygon=new L.Polygon(t.layer.getConvexHull(),this.options.polygonOptions),e.addLayer(this._shownPolygon)))},_hideCoverage:function(){this._shownPolygon&&(this._map.removeLayer(this._shownPolygon),this._shownPolygon=null)},_unbindEvents:function(){var t=this.options.spiderfyOnMaxZoom,e=this.options.showCoverageOnHover,i=this.options.zoomToBoundsOnClick,n=this._map;(t||i)&&this.off("clusterclick",this._zoomOrSpiderfy,this),e&&(this.off("clustermouseover",this._showCoverage,this),this.off("clustermouseout",this._hideCoverage,this),n.off("zoomend",this._hideCoverage,this))},_zoomEnd:function(){this._map&&(this._mergeSplitClusters(),this._zoom=this._map._zoom,this._currentShownBounds=this._getExpandedVisibleBounds())},_moveEnd:function(){if(!this._inZoomAnimation){var t=this._getExpandedVisibleBounds();this._topClusterLevel._recursivelyRemoveChildrenFromMap(this._currentShownBounds,this._zoom,t),this._topClusterLevel._recursivelyAddChildrenToMap(null,this._map._zoom,t),this._currentShownBounds=t}},_generateInitialClusters:function(){var t=this._map.getMaxZoom(),e=this.options.maxClusterRadius;this.options.disableClusteringAtZoom&&(t=this.options.disableClusteringAtZoom-1),this._maxZoom=t,this._gridClusters={},this._gridUnclustered={};for(var i=t;i>=0;i--)this._gridClusters[i]=new L.DistanceGrid(e),this._gridUnclustered[i]=new L.DistanceGrid(e);this._topClusterLevel=new L.MarkerCluster(this,-1)},_addLayer:function(t,e){var i,n,s=this._gridClusters,r=this._gridUnclustered;for(this.options.singleMarkerMode&&(t.options.icon=this.options.iconCreateFunction({getChildCount:function(){return 1},getAllChildMarkers:function(){return[t]}}));e>=0;e--){i=this._map.project(t.getLatLng(),e);var o=s[e].getNearObject(i);if(o)return o._addChild(t),t.__parent=o,void 0;if(o=r[e].getNearObject(i)){var a=o.__parent;a&&this._removeLayer(o,!1);var h=new L.MarkerCluster(this,e,o,t);s[e].addObject(h,this._map.project(h._cLatLng,e)),o.__parent=h,t.__parent=h;var _=h;for(n=e-1;n>a._zoom;n--)_=new L.MarkerCluster(this,n,_),s[n].addObject(_,this._map.project(o.getLatLng(),n));for(a._addChild(_),n=e;n>=0&&r[n].removeObject(o,this._map.project(o.getLatLng(),n));n--);return}r[e].addObject(t,i)}this._topClusterLevel._addChild(t),t.__parent=this._topClusterLevel},_enqueue:function(t){this._queue.push(t),this._queueTimeout||(this._queueTimeout=setTimeout(L.bind(this._processQueue,this),300))},_processQueue:function(){for(var t=0;t<this._queue.length;t++)this._queue[t].call(this);this._queue.length=0,clearTimeout(this._queueTimeout),this._queueTimeout=null},_mergeSplitClusters:function(){this._processQueue(),this._zoom<this._map._zoom&&this._currentShownBounds.contains(this._getExpandedVisibleBounds())?(this._animationStart(),this._topClusterLevel._recursivelyRemoveChildrenFromMap(this._currentShownBounds,this._zoom,this._getExpandedVisibleBounds()),this._animationZoomIn(this._zoom,this._map._zoom)):this._zoom>this._map._zoom?(this._animationStart(),this._animationZoomOut(this._zoom,this._map._zoom)):this._moveEnd()},_getExpandedVisibleBounds:function(){if(!this.options.removeOutsideVisibleBounds)return this.getBounds();var t=this._map,e=t.getBounds(),i=e._southWest,n=e._northEast,s=L.Browser.mobile?0:Math.abs(i.lat-n.lat),r=L.Browser.mobile?0:Math.abs(i.lng-n.lng);return new L.LatLngBounds(new L.LatLng(i.lat-s,i.lng-r,!0),new L.LatLng(n.lat+s,n.lng+r,!0))},_animationAddLayerNonAnimated:function(t,e){if(e===t)this._featureGroup.addLayer(t);else if(2===e._childCount){e._addToMap();var i=e.getAllChildMarkers();this._featureGroup.removeLayer(i[0]),this._featureGroup.removeLayer(i[1])}else e._updateIcon()}}),L.MarkerClusterGroup.include(L.DomUtil.TRANSITION?{_animationStart:function(){this._map._mapPane.className+=" leaflet-cluster-anim",this._inZoomAnimation++},_animationEnd:function(){this._map&&(this._map._mapPane.className=this._map._mapPane.className.replace(" leaflet-cluster-anim","")),this._inZoomAnimation--,this.fire("animationend")},_animationZoomIn:function(t,e){var i,n=this._getExpandedVisibleBounds(),s=this._featureGroup;this._topClusterLevel._recursively(n,t,0,function(r){var o,a=r._latlng,h=r._markers;for(n.contains(a)||(a=null),r._isSingleParent()&&t+1===e?(s.removeLayer(r),r._recursivelyAddChildrenToMap(null,e,n)):(r.setOpacity(0),r._recursivelyAddChildrenToMap(a,e,n)),i=h.length-1;i>=0;i--)o=h[i],n.contains(o._latlng)||s.removeLayer(o)}),this._forceLayout(),this._topClusterLevel._recursivelyBecomeVisible(n,e),s.eachLayer(function(t){t instanceof L.MarkerCluster||!t._icon||t.setOpacity(1)}),this._topClusterLevel._recursively(n,t,e,function(t){t._recursivelyRestoreChildPositions(e)}),this._enqueue(function(){this._topClusterLevel._recursively(n,t,0,function(t){s.removeLayer(t),t.setOpacity(1)}),this._animationEnd()})},_animationZoomOut:function(t,e){this._animationZoomOutSingle(this._topClusterLevel,t-1,e),this._topClusterLevel._recursivelyAddChildrenToMap(null,e,this._getExpandedVisibleBounds()),this._topClusterLevel._recursivelyRemoveChildrenFromMap(this._currentShownBounds,t,this._getExpandedVisibleBounds())},_animationZoomOutSingle:function(t,e,i){var n=this._getExpandedVisibleBounds();t._recursivelyAnimateChildrenInAndAddSelfToMap(n,e+1,i);var s=this;this._forceLayout(),t._recursivelyBecomeVisible(n,i),this._enqueue(function(){if(1===t._childCount){var r=t._markers[0];r.setLatLng(r.getLatLng()),r.setOpacity(1)}else t._recursively(n,i,0,function(t){t._recursivelyRemoveChildrenFromMap(n,e+1)});s._animationEnd()})},_animationAddLayer:function(t,e){var i=this,n=this._featureGroup;n.addLayer(t),e!==t&&(e._childCount>2?(e._updateIcon(),this._forceLayout(),this._animationStart(),t._setPos(this._map.latLngToLayerPoint(e.getLatLng())),t.setOpacity(0),this._enqueue(function(){n.removeLayer(t),t.setOpacity(1),i._animationEnd()})):(this._forceLayout(),i._animationStart(),i._animationZoomOutSingle(e,this._map.getMaxZoom(),this._map.getZoom())))},_forceLayout:function(){L.Util.falseFn(e.body.offsetWidth)}}:{_animationStart:function(){},_animationZoomIn:function(t,e){this._topClusterLevel._recursivelyRemoveChildrenFromMap(this._currentShownBounds,t),this._topClusterLevel._recursivelyAddChildrenToMap(null,e,this._getExpandedVisibleBounds())},_animationZoomOut:function(t,e){this._topClusterLevel._recursivelyRemoveChildrenFromMap(this._currentShownBounds,t),this._topClusterLevel._recursivelyAddChildrenToMap(null,e,this._getExpandedVisibleBounds())},_animationAddLayer:function(t,e){this._animationAddLayerNonAnimated(t,e)}}),L.markerClusterGroup=function(t){return new L.MarkerClusterGroup(t)},L.MarkerCluster=L.Marker.extend({initialize:function(t,e,i,n){L.Marker.prototype.initialize.call(this,i?i._cLatLng||i.getLatLng():new L.LatLng(0,0),{icon:this}),this._group=t,this._zoom=e,this._markers=[],this._childClusters=[],this._childCount=0,this._iconNeedsUpdate=!0,this._bounds=new L.LatLngBounds,i&&this._addChild(i),n&&this._addChild(n)},getAllChildMarkers:function(t){t=t||[];for(var e=this._childClusters.length-1;e>=0;e--)this._childClusters[e].getAllChildMarkers(t);for(var i=this._markers.length-1;i>=0;i--)t.push(this._markers[i]);return t},getChildCount:function(){return this._childCount},zoomToBounds:function(){for(var t,e=this._childClusters.slice(),i=this._group._map,n=i.getBoundsZoom(this._bounds),s=this._zoom+1,r=i.getZoom();e.length>0&&n>s;){s++;var o=[];for(t=0;t<e.length;t++)o=o.concat(e[t]._childClusters);e=o}n>s?this._group._map.setView(this._latlng,s):r>=n?this._group._map.setView(this._latlng,r+1):this._group._map.fitBounds(this._bounds)},getBounds:function(){var t=new L.LatLngBounds;return t.extend(this._bounds),t},_updateIcon:function(){this._iconNeedsUpdate=!0,this._icon&&this.setIcon(this)},createIcon:function(){return this._iconNeedsUpdate&&(this._iconObj=this._group.options.iconCreateFunction(this),this._iconNeedsUpdate=!1),this._iconObj.createIcon()},createShadow:function(){return this._iconObj.createShadow()},_addChild:function(t,e){this._iconNeedsUpdate=!0,this._expandBounds(t),t instanceof L.MarkerCluster?(e||(this._childClusters.push(t),t.__parent=this),this._childCount+=t._childCount):(e||this._markers.push(t),this._childCount++),this.__parent&&this.__parent._addChild(t,!0)},_expandBounds:function(t){var e,i=t._wLatLng||t._latlng;t instanceof L.MarkerCluster?(this._bounds.extend(t._bounds),e=t._childCount):(this._bounds.extend(i),e=1),this._cLatLng||(this._cLatLng=t._cLatLng||i);var n=this._childCount+e;this._wLatLng?(this._wLatLng.lat=(i.lat*e+this._wLatLng.lat*this._childCount)/n,this._wLatLng.lng=(i.lng*e+this._wLatLng.lng*this._childCount)/n):this._latlng=this._wLatLng=new L.LatLng(i.lat,i.lng)},_addToMap:function(t){t&&(this._backupLatlng=this._latlng,this.setLatLng(t)),this._group._featureGroup.addLayer(this)},_recursivelyAnimateChildrenIn:function(t,e,i){this._recursively(t,0,i-1,function(t){var i,n,s=t._markers;for(i=s.length-1;i>=0;i--)n=s[i],n._icon&&(n._setPos(e),n.setOpacity(0))},function(t){var i,n,s=t._childClusters;for(i=s.length-1;i>=0;i--)n=s[i],n._icon&&(n._setPos(e),n.setOpacity(0))})},_recursivelyAnimateChildrenInAndAddSelfToMap:function(t,e,i){this._recursively(t,i,0,function(n){n._recursivelyAnimateChildrenIn(t,n._group._map.latLngToLayerPoint(n.getLatLng()).round(),e),n._isSingleParent()&&e-1===i?(n.setOpacity(1),n._recursivelyRemoveChildrenFromMap(t,e)):n.setOpacity(0),n._addToMap()})},_recursivelyBecomeVisible:function(t,e){this._recursively(t,0,e,null,function(t){t.setOpacity(1)})},_recursivelyAddChildrenToMap:function(t,e,i){this._recursively(i,-1,e,function(n){if(e!==n._zoom)for(var s=n._markers.length-1;s>=0;s--){var r=n._markers[s];i.contains(r._latlng)&&(t&&(r._backupLatlng=r.getLatLng(),r.setLatLng(t),r.setOpacity&&r.setOpacity(0)),n._group._featureGroup.addLayer(r))}},function(e){e._addToMap(t)})},_recursivelyRestoreChildPositions:function(t){for(var e=this._markers.length-1;e>=0;e--){var i=this._markers[e];i._backupLatlng&&(i.setLatLng(i._backupLatlng),delete i._backupLatlng)}if(t-1===this._zoom)for(var n=this._childClusters.length-1;n>=0;n--)this._childClusters[n]._restorePosition();else for(var s=this._childClusters.length-1;s>=0;s--)this._childClusters[s]._recursivelyRestoreChildPositions(t)},_restorePosition:function(){this._backupLatlng&&(this.setLatLng(this._backupLatlng),delete this._backupLatlng)},_recursivelyRemoveChildrenFromMap:function(t,e,i){var n,s;this._recursively(t,-1,e-1,function(t){for(s=t._markers.length-1;s>=0;s--)n=t._markers[s],i&&i.contains(n._latlng)||(t._group._featureGroup.removeLayer(n),n.setOpacity&&n.setOpacity(1))},function(t){for(s=t._childClusters.length-1;s>=0;s--)n=t._childClusters[s],i&&i.contains(n._latlng)||(t._group._featureGroup.removeLayer(n),n.setOpacity&&n.setOpacity(1))})},_recursively:function(t,e,i,n,s){var r,o,a=this._childClusters,h=this._zoom;if(e>h)for(r=a.length-1;r>=0;r--)o=a[r],t.intersects(o._bounds)&&o._recursively(t,e,i,n,s);else if(n&&n(this),s&&this._zoom===i&&s(this),i>h)for(r=a.length-1;r>=0;r--)o=a[r],t.intersects(o._bounds)&&o._recursively(t,e,i,n,s)},_recalculateBounds:function(){var t,e=this._markers,i=this._childClusters;for(this._bounds=new L.LatLngBounds,delete this._wLatLng,t=e.length-1;t>=0;t--)this._expandBounds(e[t]);for(t=i.length-1;t>=0;t--)this._expandBounds(i[t])},_isSingleParent:function(){return this._childClusters.length>0&&this._childClusters[0]._childCount===this._childCount}}),L.DistanceGrid=function(t){this._cellSize=t,this._sqCellSize=t*t,this._grid={},this._objectPoint={}},L.DistanceGrid.prototype={addObject:function(t,e){var i=this._getCoord(e.x),n=this._getCoord(e.y),s=this._grid,r=s[n]=s[n]||{},o=r[i]=r[i]||[],a=L.Util.stamp(t);this._objectPoint[a]=e,o.push(t)},updateObject:function(t,e){this.removeObject(t),this.addObject(t,e)},removeObject:function(t,e){var i,n,s=this._getCoord(e.x),r=this._getCoord(e.y),o=this._grid,a=o[r]=o[r]||{},h=a[s]=a[s]||[];for(delete this._objectPoint[L.Util.stamp(t)],i=0,n=h.length;n>i;i++)if(h[i]===t)return h.splice(i,1),1===n&&delete a[s],!0},eachObject:function(t,e){var i,n,s,r,o,a,h,_=this._grid;for(i in _){o=_[i];for(n in o)for(a=o[n],s=0,r=a.length;r>s;s++)h=t.call(e,a[s]),h&&(s--,r--)}},getNearObject:function(t){var e,i,n,s,r,o,a,h,_=this._getCoord(t.x),u=this._getCoord(t.y),l=this._objectPoint,d=this._sqCellSize,p=null;for(e=u-1;u+1>=e;e++)if(s=this._grid[e])for(i=_-1;_+1>=i;i++)if(r=s[i])for(n=0,o=r.length;o>n;n++)a=r[n],h=this._sqDist(l[L.Util.stamp(a)],t),d>h&&(d=h,p=a);return p},_getCoord:function(t){return Math.floor(t/this._cellSize)},_sqDist:function(t,e){var i=e.x-t.x,n=e.y-t.y;return i*i+n*n}},function(){L.QuickHull={getDistant:function(t,e){var i=e[1].lat-e[0].lat,n=e[0].lng-e[1].lng;return n*(t.lat-e[0].lat)+i*(t.lng-e[0].lng)},findMostDistantPointFromBaseLine:function(t,e){var i,n,s,r=0,o=null,a=[];for(i=e.length-1;i>=0;i--)n=e[i],s=this.getDistant(n,t),s>0&&(a.push(n),s>r&&(r=s,o=n));return{maxPoint:o,newPoints:a}},buildConvexHull:function(t,e){var i=[],n=this.findMostDistantPointFromBaseLine(t,e);return n.maxPoint?(i=i.concat(this.buildConvexHull([t[0],n.maxPoint],n.newPoints)),i=i.concat(this.buildConvexHull([n.maxPoint,t[1]],n.newPoints))):[t[0]]},getConvexHull:function(t){var e,i=!1,n=!1,s=null,r=null;for(e=t.length-1;e>=0;e--){var o=t[e];(i===!1||o.lat>i)&&(s=o,i=o.lat),(n===!1||o.lat<n)&&(r=o,n=o.lat)}var a=[].concat(this.buildConvexHull([r,s],t),this.buildConvexHull([s,r],t));return a}}}(),L.MarkerCluster.include({getConvexHull:function(){var t,e,i=this.getAllChildMarkers(),n=[];for(e=i.length-1;e>=0;e--)t=i[e].getLatLng(),n.push(t);return L.QuickHull.getConvexHull(n)}}),L.MarkerCluster.include({_2PI:2*Math.PI,_circleFootSeparation:25,_circleStartAngle:Math.PI/6,_spiralFootSeparation:28,_spiralLengthStart:11,_spiralLengthFactor:5,_circleSpiralSwitchover:9,spiderfy:function(){if(this._group._spiderfied!==this&&!this._group._inZoomAnimation){var t,e=this.getAllChildMarkers(),i=this._group,n=i._map,s=n.latLngToLayerPoint(this._latlng);this._group._unspiderfy(),this._group._spiderfied=this,e.length>=this._circleSpiralSwitchover?t=this._generatePointsSpiral(e.length,s):(s.y+=10,t=this._generatePointsCircle(e.length,s)),this._animationSpiderfy(e,t)}},unspiderfy:function(t){this._group._inZoomAnimation||(this._animationUnspiderfy(t),this._group._spiderfied=null)},_generatePointsCircle:function(t,e){var i,n,s=this._group.options.spiderfyDistanceMultiplier*this._circleFootSeparation*(2+t),r=s/this._2PI,o=this._2PI/t,a=[];for(a.length=t,i=t-1;i>=0;i--)n=this._circleStartAngle+i*o,a[i]=new L.Point(e.x+r*Math.cos(n),e.y+r*Math.sin(n))._round();return a},_generatePointsSpiral:function(t,e){var i,n=this._group.options.spiderfyDistanceMultiplier*this._spiralLengthStart,s=this._group.options.spiderfyDistanceMultiplier*this._spiralFootSeparation,r=this._group.options.spiderfyDistanceMultiplier*this._spiralLengthFactor,o=0,a=[];for(a.length=t,i=t-1;i>=0;i--)o+=s/n+5e-4*i,a[i]=new L.Point(e.x+n*Math.cos(o),e.y+n*Math.sin(o))._round(),n+=this._2PI*r/o;return a},_noanimationUnspiderfy:function(){var t,e,i=this._group,n=i._map,s=i._featureGroup,r=this.getAllChildMarkers();for(this.setOpacity(1),e=r.length-1;e>=0;e--)t=r[e],s.removeLayer(t),t._preSpiderfyLatlng&&(t.setLatLng(t._preSpiderfyLatlng),delete t._preSpiderfyLatlng),t.setZIndexOffset&&t.setZIndexOffset(0),t._spiderLeg&&(n.removeLayer(t._spiderLeg),delete t._spiderLeg);i._spiderfied=null}}),L.MarkerCluster.include(L.DomUtil.TRANSITION?{SVG_ANIMATION:function(){return e.createElementNS("http://www.w3.org/2000/svg","animate").toString().indexOf("SVGAnimate")>-1}(),_animationSpiderfy:function(t,i){var n,s,r,o,a=this,h=this._group,_=h._map,u=h._featureGroup,l=_.latLngToLayerPoint(this._latlng);for(n=t.length-1;n>=0;n--)s=t[n],s.setOpacity?(s.setZIndexOffset(1e6),s.setOpacity(0),u.addLayer(s),s._setPos(l)):u.addLayer(s);h._forceLayout(),h._animationStart();var d=L.Path.SVG?0:.3,p=L.Path.SVG_NS;for(n=t.length-1;n>=0;n--)if(o=_.layerPointToLatLng(i[n]),s=t[n],s._preSpiderfyLatlng=s._latlng,s.setLatLng(o),s.setOpacity&&s.setOpacity(1),r=new L.Polyline([a._latlng,o],{weight:1.5,color:"#222",opacity:d}),_.addLayer(r),s._spiderLeg=r,L.Path.SVG&&this.SVG_ANIMATION){var c=r._path.getTotalLength();r._path.setAttribute("stroke-dasharray",c+","+c);var m=e.createElementNS(p,"animate");m.setAttribute("attributeName","stroke-dashoffset"),m.setAttribute("begin","indefinite"),m.setAttribute("from",c),m.setAttribute("to",0),m.setAttribute("dur",.25),r._path.appendChild(m),m.beginElement(),m=e.createElementNS(p,"animate"),m.setAttribute("attributeName","stroke-opacity"),m.setAttribute("attributeName","stroke-opacity"),m.setAttribute("begin","indefinite"),m.setAttribute("from",0),m.setAttribute("to",.5),m.setAttribute("dur",.25),r._path.appendChild(m),m.beginElement()}if(a.setOpacity(.3),L.Path.SVG)for(this._group._forceLayout(),n=t.length-1;n>=0;n--)s=t[n]._spiderLeg,s.options.opacity=.5,s._path.setAttribute("stroke-opacity",.5);setTimeout(function(){h._animationEnd(),h.fire("spiderfied")},200)},_animationUnspiderfy:function(t){var e,i,n,s=this._group,r=s._map,o=s._featureGroup,a=t?r._latLngToNewLayerPoint(this._latlng,t.zoom,t.center):r.latLngToLayerPoint(this._latlng),h=this.getAllChildMarkers(),_=L.Path.SVG&&this.SVG_ANIMATION;for(s._animationStart(),this.setOpacity(1),i=h.length-1;i>=0;i--)e=h[i],e._preSpiderfyLatlng&&(e.setLatLng(e._preSpiderfyLatlng),delete e._preSpiderfyLatlng,e.setOpacity?(e._setPos(a),e.setOpacity(0)):o.removeLayer(e),_&&(n=e._spiderLeg._path.childNodes[0],n.setAttribute("to",n.getAttribute("from")),n.setAttribute("from",0),n.beginElement(),n=e._spiderLeg._path.childNodes[1],n.setAttribute("from",.5),n.setAttribute("to",0),n.setAttribute("stroke-opacity",0),n.beginElement(),e._spiderLeg._path.setAttribute("stroke-opacity",0)));setTimeout(function(){var t=0;for(i=h.length-1;i>=0;i--)e=h[i],e._spiderLeg&&t++;for(i=h.length-1;i>=0;i--)e=h[i],e._spiderLeg&&(e.setOpacity&&(e.setOpacity(1),e.setZIndexOffset(0)),t>1&&o.removeLayer(e),r.removeLayer(e._spiderLeg),delete e._spiderLeg);s._animationEnd()},200)}}:{_animationSpiderfy:function(t,e){var i,n,s,r,o=this._group,a=o._map,h=o._featureGroup;for(i=t.length-1;i>=0;i--)r=a.layerPointToLatLng(e[i]),n=t[i],n._preSpiderfyLatlng=n._latlng,n.setLatLng(r),n.setZIndexOffset&&n.setZIndexOffset(1e6),h.addLayer(n),s=new L.Polyline([this._latlng,r],{weight:1.5,color:"#222"}),a.addLayer(s),n._spiderLeg=s;this.setOpacity(.3),o.fire("spiderfied")},_animationUnspiderfy:function(){this._noanimationUnspiderfy()}}),L.MarkerClusterGroup.include({_spiderfied:null,_spiderfierOnAdd:function(){this._map.on("click",this._unspiderfyWrapper,this),this._map.options.zoomAnimation&&this._map.on("zoomstart",this._unspiderfyZoomStart,this),this._map.on("zoomend",this._noanimationUnspiderfy,this),L.Path.SVG&&!L.Browser.touch&&this._map._initPathRoot()},_spiderfierOnRemove:function(){this._map.off("click",this._unspiderfyWrapper,this),this._map.off("zoomstart",this._unspiderfyZoomStart,this),this._map.off("zoomanim",this._unspiderfyZoomAnim,this),this._unspiderfy()},_unspiderfyZoomStart:function(){this._map&&this._map.on("zoomanim",this._unspiderfyZoomAnim,this)},_unspiderfyZoomAnim:function(t){L.DomUtil.hasClass(this._map._mapPane,"leaflet-touching")||(this._map.off("zoomanim",this._unspiderfyZoomAnim,this),this._unspiderfy(t))},_unspiderfyWrapper:function(){this._unspiderfy()},_unspiderfy:function(t){this._spiderfied&&this._spiderfied.unspiderfy(t)},_noanimationUnspiderfy:function(){this._spiderfied&&this._spiderfied._noanimationUnspiderfy()},_unspiderfyLayer:function(t){t._spiderLeg&&(this._featureGroup.removeLayer(t),t.setOpacity(1),t.setZIndexOffset(0),this._map.removeLayer(t._spiderLeg),delete t._spiderLeg)}})}(window,document);
 
 /***/ },
-/* 7 */
+/* 9 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = function() { throw new Error("define cannot be used indirect"); };
+
+
+/***/ },
+/* 10 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = {};
 
 
 /***/ },
-/* 8 */
+/* 11 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Mosaic = module.exports = __webpack_require__(7);
+	var Mosaic = module.exports = __webpack_require__(10);
 	var _ = __webpack_require__(2);
 
 	/** Common superclass for all other types. */
@@ -13672,10 +13567,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 9 */
+/* 12 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Mosaic = module.exports = __webpack_require__(7);
+	var Mosaic = module.exports = __webpack_require__(10);
 	var _ = __webpack_require__(2);
 	Mosaic.Errors = Errors;
 
@@ -13761,12 +13656,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 10 */
+/* 13 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Mosaic = module.exports = __webpack_require__(7);
+	var Mosaic = module.exports = __webpack_require__(10);
 
-	var events = __webpack_require__(12);
+	var events = __webpack_require__(15);
 	var _ = __webpack_require__(2);
 
 	Mosaic.Events = function() {
@@ -13858,7 +13753,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	});
 
 /***/ },
-/* 11 */
+/* 14 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/*
@@ -13892,8 +13787,8 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	 *     
 	 */
-	var Mosaic = module.exports = __webpack_require__(7);
-	var LIB = __webpack_require__(13);
+	var Mosaic = module.exports = __webpack_require__(10);
+	var LIB = __webpack_require__(16);
 	function array_slice(array, count) {
 	    return Array.prototype.slice.call(array, count);
 	}
@@ -14019,7 +13914,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 12 */
+/* 15 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// Copyright Joyent, Inc. and other Node contributors.
@@ -14328,7 +14223,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 13 */
+/* 16 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -14343,22 +14238,22 @@ return /******/ (function(modules) { // webpackBootstrap
 	(function(define) { 'use strict';
 	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
 
-		var timed = __webpack_require__(16);
-		var array = __webpack_require__(17);
-		var flow = __webpack_require__(18);
-		var fold = __webpack_require__(19);
-		var inspect = __webpack_require__(20);
-		var generate = __webpack_require__(21);
-		var progress = __webpack_require__(22);
-		var withThis = __webpack_require__(23);
-		var unhandledRejection = __webpack_require__(24);
-		var TimeoutError = __webpack_require__(14);
+		var timed = __webpack_require__(19);
+		var array = __webpack_require__(20);
+		var flow = __webpack_require__(21);
+		var fold = __webpack_require__(22);
+		var inspect = __webpack_require__(23);
+		var generate = __webpack_require__(24);
+		var progress = __webpack_require__(25);
+		var withThis = __webpack_require__(26);
+		var unhandledRejection = __webpack_require__(27);
+		var TimeoutError = __webpack_require__(17);
 
 		var Promise = [array, flow, fold, generate, progress,
 			inspect, withThis, timed, unhandledRejection]
 			.reduce(function(Promise, feature) {
 				return feature(Promise);
-			}, __webpack_require__(15));
+			}, __webpack_require__(18));
 
 		var slice = Array.prototype.slice;
 
@@ -14603,11 +14498,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 		return when;
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	})(__webpack_require__(25));
+	})(__webpack_require__(9));
 
 
 /***/ },
-/* 14 */
+/* 17 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -14636,10 +14531,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 		return TimeoutError;
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 /***/ },
-/* 15 */
+/* 18 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -14649,20 +14544,20 @@ return /******/ (function(modules) { // webpackBootstrap
 	(function(define) { 'use strict';
 	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
 
-		var makePromise = __webpack_require__(26);
-		var Scheduler = __webpack_require__(27);
-		var async = __webpack_require__(28);
+		var makePromise = __webpack_require__(28);
+		var Scheduler = __webpack_require__(29);
+		var async = __webpack_require__(30);
 
 		return makePromise({
 			scheduler: new Scheduler(async)
 		});
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	})(__webpack_require__(25));
+	})(__webpack_require__(9));
 
 
 /***/ },
-/* 16 */
+/* 19 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -14672,8 +14567,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	(function(define) { 'use strict';
 	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function(require) {
 
-		var timer = __webpack_require__(29);
-		var TimeoutError = __webpack_require__(14);
+		var timer = __webpack_require__(31);
+		var TimeoutError = __webpack_require__(17);
 
 		function setTimeout(f, ms, x, y) {
 			return timer.set(function() {
@@ -14742,11 +14637,11 @@ return /******/ (function(modules) { // webpackBootstrap
 		};
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 17 */
+/* 20 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -15005,11 +14900,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 18 */
+/* 21 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -15152,11 +15047,11 @@ return /******/ (function(modules) { // webpackBootstrap
 		}
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 19 */
+/* 22 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -15185,11 +15080,11 @@ return /******/ (function(modules) { // webpackBootstrap
 		};
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 20 */
+/* 23 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -15223,11 +15118,11 @@ return /******/ (function(modules) { // webpackBootstrap
 		};
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 21 */
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -15292,11 +15187,11 @@ return /******/ (function(modules) { // webpackBootstrap
 		};
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 22 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -15321,11 +15216,11 @@ return /******/ (function(modules) { // webpackBootstrap
 		};
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 23 */
+/* 26 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -15363,12 +15258,12 @@ return /******/ (function(modules) { // webpackBootstrap
 		};
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 
 /***/ },
-/* 24 */
+/* 27 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -15378,7 +15273,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	(function(define) { 'use strict';
 	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function(require) {
 
-		var timer = __webpack_require__(29);
+		var timer = __webpack_require__(31);
 
 		return function unhandledRejection(Promise) {
 			var logError = noop;
@@ -15472,18 +15367,11 @@ return /******/ (function(modules) { // webpackBootstrap
 		function noop() {}
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 25 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = function() { throw new Error("define cannot be used indirect"); };
-
-
-/***/ },
-/* 26 */
+/* 28 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -16267,11 +16155,11 @@ return /******/ (function(modules) { // webpackBootstrap
 			return Promise;
 		};
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 27 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -16281,7 +16169,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	(function(define) { 'use strict';
 	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function(require) {
 
-		var Queue = __webpack_require__(31);
+		var Queue = __webpack_require__(33);
 
 		// Credit to Twisol (https://github.com/Twisol) for suggesting
 		// this type of extensible queue + trampoline approach for next-tick conflation.
@@ -16355,11 +16243,11 @@ return /******/ (function(modules) { // webpackBootstrap
 		return Scheduler;
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 28 */
+/* 30 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;var require;/* WEBPACK VAR INJECTION */(function(process) {/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -16408,7 +16296,7 @@ return /******/ (function(modules) { // webpackBootstrap
 			nextTick = (function(cjsRequire) {
 				try {
 					// vert.x 1.x || 2.x
-					return __webpack_require__(30).runOnLoop || __webpack_require__(30).runOnContext;
+					return __webpack_require__(32).runOnLoop || __webpack_require__(32).runOnContext;
 				} catch (ignore) {}
 
 				// capture setTimeout to avoid being caught by fake timers
@@ -16422,12 +16310,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 		return nextTick;
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(32)))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(34)))
 
 /***/ },
-/* 29 */
+/* 31 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;var require;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -16442,7 +16330,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		cjsRequire = require;
 
 		try {
-			vertx = __webpack_require__(30);
+			vertx = __webpack_require__(32);
 			setTimer = function (f, ms) { return vertx.setTimer(ms, f); };
 			clearTimer = vertx.cancelTimer;
 		} catch (e) {
@@ -16456,18 +16344,18 @@ return /******/ (function(modules) { // webpackBootstrap
 		};
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 30 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
-	if(typeof __WEBPACK_EXTERNAL_MODULE_30__ === 'undefined') {var e = new Error("Cannot find module \"vertx\""); e.code = 'MODULE_NOT_FOUND'; throw e;}
-	module.exports = __WEBPACK_EXTERNAL_MODULE_30__;
+	if(typeof __WEBPACK_EXTERNAL_MODULE_32__ === 'undefined') {var e = new Error("Cannot find module \"vertx\""); e.code = 'MODULE_NOT_FOUND'; throw e;}
+	module.exports = __WEBPACK_EXTERNAL_MODULE_32__;
 
 /***/ },
-/* 31 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
@@ -16539,11 +16427,11 @@ return /******/ (function(modules) { // webpackBootstrap
 		return Queue;
 
 	}.call(exports, __webpack_require__, exports, module)), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	}(__webpack_require__(25)));
+	}(__webpack_require__(9)));
 
 
 /***/ },
-/* 32 */
+/* 34 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// shim for using process in browser
