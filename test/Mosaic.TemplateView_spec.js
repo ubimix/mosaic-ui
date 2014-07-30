@@ -1,5 +1,5 @@
 (function(context) {
-    var Mosaic = context.MosaicUI;
+    var Mosaic = context.Mosaic;
 
     var html = [ '<div>', '<h3 data-render="renderTitle">abc</h3>',
             '<script>({',

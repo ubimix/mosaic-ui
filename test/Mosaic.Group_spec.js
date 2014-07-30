@@ -1,5 +1,5 @@
 (function(context) {
-    var Mosaic = context.MosaicUI;
+    var Mosaic = context.Mosaic;
 
     describe("Mosaic.Group", function() {
         it("should be able to add/remove entities and notify about it",

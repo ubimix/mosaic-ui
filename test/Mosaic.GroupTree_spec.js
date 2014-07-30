@@ -1,5 +1,5 @@
 (function(context) {
-    var Mosaic = context.MosaicUI;
+    var Mosaic = context.Mosaic;
 
     describe('Mosaic.GroupTree', function() {
 

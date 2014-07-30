@@ -16,7 +16,7 @@ module.exports = function(config) {
         'libs/expect/index.js',//
         'libs/mocha/mocha.js',//
         // this name is defined in the package.json as the "appname" field
-        'dist/MosaicUI.js', // 
+        'dist/Mosaic.js', // 
         'test/*_spec.js' //
         ],
 
