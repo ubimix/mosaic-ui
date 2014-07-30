@@ -1,5 +1,5 @@
 /*!
- * MosaicUI v0.2.51 | License: MIT 
+ * Mosaic v0.2.52 | License: MIT 
  * 
  */
 (function webpackUniversalModuleDefinition(root, factory) {
@@ -8,9 +8,9 @@
 	else if(typeof define === 'function' && define.amd)
 		define(["_", "jQuery", "vertx"], factory);
 	else if(typeof exports === 'object')
-		exports["MosaicUI"] = factory(require("_"), require("jQuery"), (function webpackLoadOptionalExternalModule() { try { return require("vertx"); } catch(e) {} }()));
+		exports["Mosaic"] = factory(require("_"), require("jQuery"), (function webpackLoadOptionalExternalModule() { try { return require("vertx"); } catch(e) {} }()));
 	else
-		root["MosaicUI"] = factory(root["_"], root["jQuery"], root["vertx"]);
+		root["Mosaic"] = factory(root["_"], root["jQuery"], root["vertx"]);
 })(this, function(__WEBPACK_EXTERNAL_MODULE_2__, __WEBPACK_EXTERNAL_MODULE_3__, __WEBPACK_EXTERNAL_MODULE_30__) {
 return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
