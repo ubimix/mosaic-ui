@@ -1,5 +1,5 @@
 /*!
- * Mosaic v0.2.52 | License: MIT 
+ * Mosaic v0.2.53 | License: MIT 
  * 
  */
 (function webpackUniversalModuleDefinition(root, factory) {
