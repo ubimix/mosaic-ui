@@ -14,7 +14,7 @@ module.exports = function(grunt) {
     configurator.initUglify();
     configurator.registerBumpTasks();
     grunt.initConfig(configurator.config);
-    grunt.registerTask('test', [ /* 'jshint', */ 'karma:continuous' ]);
+    grunt.registerTask('test', [ 'jshint', 'karma:continuous' ]);
     grunt.registerTask('build', [ 'webpack', 'test' ]);
     grunt.registerTask('build-min', [ 'build', 'uglify' ]);
     grunt.registerTask('commit', [ 'build-min', 'bump-commit' ]);

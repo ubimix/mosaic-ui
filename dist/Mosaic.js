@@ -3879,24 +3879,24 @@ return /******/ (function(modules) { // webpackBootstrap
 	                type = o.type = o.type || _.uniqueId('type-');
 	            }
 	            return type;
-	            
-	            var typeId;
-	            if (_.isString(obj)) {
-	                typeId = obj;
-	            } else if (obj.type) {
-	                typeId = obj.type;
-	            }
-	            if (!_.isString(typeId)) {
-	                var type;
-	                if (_.isFunction(obj)) {
-	                    type = _.isFunction(obj.getClass) ? obj.getClass()
-	                            : obj['class'];
-	                }
-	                if (type) {
-	                    typeId = type._typeId;
-	                }
-	            }
-	            return typeId;
+	            //            
+	            // var typeId;
+	            // if (_.isString(obj)) {
+	            // typeId = obj;
+	            // } else if (obj.type) {
+	            // typeId = obj.type;
+	            // }
+	            // if (!_.isString(typeId)) {
+	            // var type;
+	            // if (_.isFunction(obj)) {
+	            // type = _.isFunction(obj.getClass) ? obj.getClass()
+	            // : obj['class'];
+	            // }
+	            // if (type) {
+	            // typeId = type._typeId;
+	            // }
+	            // }
+	            // return typeId;
 	        }
 
 	        /**
