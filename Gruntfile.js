@@ -4,9 +4,9 @@ module.exports = function(grunt) {
     configurator.initBump();
     configurator.initWebpack({
         externals : [ {
-            'jquery' : 'jQuery',
-            'underscore' : '_',
-            'vertx' : 'vertx'
+            'jquery' : 'jquery',
+            'underscore' : 'underscore',
+            'mosaic-commons' : 'mosaic-commons',
         } ]
     });
     configurator.initKarma();
