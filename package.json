@@ -1,7 +1,7 @@
 {
   "name": "mosaic-ui",
   "appname" : "Mosaic",
-  "version": "0.2.53",
+  "version": "0.2.54",
   "main": "src",
   "licenses": [
     {
